@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+<title>মেসার্স ধুনট সিড এন্ড এগ্রো ট্রেডার্স — এসপিও অ্যাপ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#F2EEE3;
+    --paper-2:#EAE4D4;
+    --ink:#22201B;
+    --ink-soft:#6B655A;
+    --navy:#26344A;
+    --navy-2:#374A66;
+    --stamp:#B4402A;
+    --stamp-soft:#E7C9BF;
+    --line:#D8D0BC;
+    --ok:#3F7D58;
+    --ok-soft:#D9E8DD;
+    --gold:#B4862C;
+    --gold-soft:#EFE1BF;
+    --card:#FFFDF8;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Noto Sans Bengali','Inter',sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+  }
+  header.app-top{
+    background:var(--navy);
+    color:#fff;
+    padding:14px 16px 12px;
+    position:sticky;
+    top:0;
+    z-index:10;
+  }
+  .app-top .row1{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .app-top h1{
+    font-size:16px;
+    margin:0;
+    font-weight:700;
+    letter-spacing:.2px;
+  }
+  .app-top .sub{
+    font-size:12px;
+    color:#C7CEDA;
+    margin-top:4px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .conn-dot{
+    display:inline-block;
+    width:7px;height:7px;
+    border-radius:50%;
+    background:#8FBF9F;
+    flex-shrink:0;
+  }
+  .conn-dot.off{background:var(--stamp-soft);}
+  .spo-edit-link{
+    color:#C7CEDA;
+    text-decoration:underline;
+    cursor:pointer;
+    font-size:11px;
+    margin-left:4px;
+  }
+  .back-home-btn{
+    background:none;
+    border:1px solid #4A5A73;
+    color:#fff;
+    border-radius:6px;
+    padding:4px 10px;
+    font-size:12px;
+    cursor:pointer;
+    font-family:inherit;
+  }
+
+  .steps-bar{
+    display:flex;
+    gap:0;
+    background:var(--paper-2);
+    border-bottom:1px solid var(--line);
+  }
+  .step-tab{
+    flex:1;
+    text-align:center;
+    padding:10px 4px;
+    font-size:12px;
+    color:var(--ink-soft);
+    border-bottom:3px solid transparent;
+    position:relative;
+  }
+  .step-tab .num{
+    display:inline-block;
+    width:18px;height:18px;
+    line-height:18px;
+    border-radius:50%;
+    background:var(--line);
+    color:var(--ink-soft);
+    font-size:11px;
+    margin-right:4px;
+    font-weight:600;
+  }
+  .step-tab.active{color:var(--navy);border-bottom-color:var(--stamp);}
+  .step-tab.active .num{background:var(--stamp);color:#fff;}
+  .step-tab.done .num{background:var(--ok);color:#fff;}
+
+  main{
+    flex:1;
+    padding:16px;
+    max-width:640px;
+    width:100%;
+    margin:0 auto;
+    padding-bottom:100px;
+  }
+
+  .panel{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+  }
+  .panel + .panel{margin-top:12px;}
+
+  .field-label{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+    font-weight:500;
+  }
+
+  /* ---------- dashboard ---------- */
+  .stat-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .stat-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:14px 12px;
+  }
+  .stat-card.wide{grid-column:1 / -1;}
+  .stat-card .label{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    margin-bottom:4px;
+  }
+  .stat-card .value{
+    font-size:19px;
+    font-weight:700;
+    color:var(--navy);
+  }
+  .stat-card.due .value{color:var(--stamp);}
+  .stat-card .note{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+  .big-order-btn{
+    width:100%;
+    padding:20px 16px;
+    border-radius:var(--radius);
+    border:none;
+    background:var(--stamp);
+    color:#fff;
+    font-size:18px;
+    font-weight:700;
+    font-family:inherit;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+  }
+  .big-order-btn .arrow{font-size:20px;}
+
+  .option-list{
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+  .option-btn{
+    text-align:right;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 14px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-size:15px;
+    color:var(--ink);
+    cursor:pointer;
+    font-family:inherit;
+    direction:rtl;
+    width:100%;
+  }
+  .option-btn:hover{border-color:var(--navy-2);}
+  .option-btn.selected{
+    border-color:var(--stamp);
+    background:var(--stamp-soft);
+    font-weight:600;
+  }
+  .option-btn .chev{color:var(--ink-soft);font-size:13px;}
+  .option-btn .sub-line{
+    display:block;
+    font-size:12px;
+    color:var(--ink-soft);
+    font-weight:400;
+    margin-top:2px;
+  }
+
+  .empty-state{
+    padding:24px 12px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:14px;
+  }
+
+  .product-row{
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px 12px;
+    margin-bottom:8px;
+    background:#fff;
+  }
+  .product-row .p-name{
+    font-size:15px;
+    font-weight:600;
+    margin-bottom:2px;
+  }
+  .product-row .p-stock{
+    font-size:12px;
+    color:var(--ink-soft);
+    margin-bottom:8px;
+  }
+  .product-row .p-stock.low{color:var(--stamp);font-weight:600;}
+  .qty-inputs{
+    display:flex;
+    gap:8px;
+  }
+  .qty-field{flex:1;}
+  .qty-field label{
+    display:block;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-bottom:3px;
+  }
+  .qty-field input{
+    width:100%;
+    padding:8px 10px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-size:15px;
+    font-family:inherit;
+    text-align:center;
+  }
+  .qty-field input:focus{outline:2px solid var(--navy-2);outline-offset:1px;}
+  .qty-field input.invalid{border-color:var(--stamp);background:#FBEAE6;}
+  .qty-field.carton input{background:#E9F1FB;border-color:#B9D2EE;color:#1F4E86;font-weight:700;}
+  .qty-field.carton input::placeholder{color:#5C82B0;font-weight:600;}
+  .qty-field.piece input{background:#FBF1E3;border-color:#EAD3A0;color:#8A5A16;font-weight:700;}
+  .qty-field.piece input::placeholder{color:#B0854B;font-weight:600;}
+  .qty-field.carton label{color:#1F4E86;font-weight:600;}
+  .qty-field.piece label{color:#8A5A16;font-weight:600;}
+
+  .collect-btn{
+    width:100%;
+    padding:20px 16px;
+    border-radius:var(--radius);
+    border:none;
+    background:var(--navy);
+    color:#fff;
+    font-size:18px;
+    font-weight:700;
+    font-family:inherit;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    margin-top:10px;
+  }
+
+  .activity-row{
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:10px 12px;
+    margin-bottom:8px;
+    background:#fff;
+    cursor:pointer;
+  }
+  .activity-row .a-top{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:8px;
+  }
+  .activity-row .a-name{font-size:14px;font-weight:600;}
+  .activity-row .a-date{font-size:11px;color:var(--ink-soft);}
+  .activity-status{
+    font-size:12px;
+    font-weight:700;
+    padding:2px 8px;
+    border-radius:20px;
+    white-space:nowrap;
+  }
+  .activity-status.pending{background:var(--gold-soft);color:var(--gold);}
+  .activity-status.ok{background:var(--ok-soft);color:var(--ok);}
+  .activity-status.rejected{background:var(--stamp-soft);color:var(--stamp);}
+  .activity-detail{
+    display:none;
+    margin-top:8px;
+    padding-top:8px;
+    border-top:1px dashed var(--line);
+    font-size:12.5px;
+    color:var(--ink-soft);
+  }
+  .activity-row.expanded .activity-detail{display:block;}
+  .stock-error{
+    font-size:12px;
+    color:var(--stamp);
+    margin-top:6px;
+    font-weight:600;
+  }
+
+  .search-box{
+    width:100%;
+    padding:10px 12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:14px;
+    font-family:inherit;
+    margin-bottom:12px;
+  }
+
+  footer.bottom-bar{
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    background:var(--card);
+    border-top:1px solid var(--line);
+    padding:10px 16px;
+    display:flex;
+    gap:10px;
+    max-width:640px;
+    margin:0 auto;
+    z-index:10;
+  }
+  .btn{
+    flex:1;
+    padding:13px 10px;
+    border-radius:8px;
+    border:none;
+    font-size:15px;
+    font-weight:600;
+    font-family:inherit;
+    cursor:pointer;
+  }
+  .btn-secondary{
+    background:var(--paper-2);
+    color:var(--ink);
+    border:1px solid var(--line);
+    flex:0 0 90px;
+  }
+  .btn-primary{
+    background:var(--stamp);
+    color:#fff;
+  }
+  .btn-primary:disabled{
+    background:#D8B8AF;
+    cursor:not-allowed;
+  }
+  .btn-primary.ok{background:var(--ok);}
+
+  .toast{
+    position:fixed;
+    top:14px;
+    left:50%;
+    transform:translateX(-50%);
+    background:var(--ink);
+    color:#fff;
+    padding:10px 18px;
+    border-radius:8px;
+    font-size:14px;
+    z-index:50;
+    max-width:90%;
+    text-align:center;
+  }
+  .toast.error{background:var(--stamp);}
+  .toast.ok{background:var(--ok);}
+
+  .loading-dot{
+    text-align:center;
+    padding:30px;
+    color:var(--ink-soft);
+    font-size:14px;
+  }
+
+  /* ---------- invoice-style review ---------- */
+  .invoice-card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow:hidden;
+  }
+  .invoice-head{
+    background:var(--navy);
+    color:#fff;
+    padding:14px 16px 12px;
+    text-align:center;
+  }
+  .invoice-shop{font-weight:700;font-size:15px;letter-spacing:.2px;}
+  .invoice-sub{font-size:11px;color:#C7CEDA;margin-top:3px;}
+  .invoice-meta{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px 14px;
+    padding:12px 16px;
+    border-bottom:1px solid var(--line);
+    background:var(--paper-2);
+  }
+  .invoice-meta span{display:block;color:var(--ink-soft);font-size:10px;margin-bottom:1px;}
+  .invoice-meta b{font-size:13px;font-weight:600;}
+  .invoice-table-wrap{overflow-x:auto;}
+  table.invoice-table{width:100%;border-collapse:collapse;font-size:12.5px;}
+  .invoice-table thead th{
+    background:#fff;
+    text-align:right;
+    padding:9px 10px;
+    font-size:10.5px;
+    color:var(--ink-soft);
+    font-weight:600;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+  }
+  .invoice-table thead th.inv-th-name{text-align:left;}
+  .invoice-table tbody td{padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top;}
+  .invoice-table tbody tr:nth-child(even){background:#FBF8F1;}
+  .inv-td-name{text-align:left;font-weight:600;max-width:150px;}
+  .inv-td-num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ink-soft);}
+  .inv-td-total{color:var(--ink);font-weight:700;}
+  .invoice-total-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 16px;
+    background:var(--ok-soft);
+    border-top:2px solid var(--ok);
+    font-weight:700;
+    font-size:14px;
+  }
+  .invoice-total-row .amt{font-size:19px;color:var(--ok);}
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div class="row1">
+    <h1>মেসার্স ধুনট সিড এন্ড এগ্রো ট্রেডার্স</h1>
+    <button class="back-home-btn" id="homeBtn" style="display:none;">🏠 হোম</button>
+  </div>
+  <div class="sub">এসপিও: <b id="spoNameDisplay">—</b><span class="spo-edit-link" id="editSpoBtn">✎ বদলান</span></div>
+  <div class="sub"><span class="conn-dot" id="connDot"></span><span id="connText">সংযুক্ত হচ্ছে…</span></div>
+</header>
+
+<div class="steps-bar" id="stepsBar" style="display:none;"></div>
+
+<main id="mainArea">
+  <div class="loading-dot">লোড হচ্ছে…</div>
+</main>
+
+<footer class="bottom-bar" id="bottomBar" style="display:none;">
+  <button class="btn btn-secondary" id="backBtn">পেছনে</button>
+  <button class="btn btn-primary" id="nextBtn">পরে</button>
+</footer>
+
+<!-- Firebase compat SDK — অ্যাডমিন ফাইলের সাথে একই ভার্সন (v8.10.1) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+
+<script>
+// ------------------------------------------------------------------
+// অ্যাডমিন ফাইল থেকে নেওয়া একই ফায়ারবেস কনফিগ
+// ------------------------------------------------------------------
+const firebaseConfig = {
+  apiKey: "AIzaSyBcpEzIN18lkFQJOchwXK4OERLe58va9Yw",
+  authDomain: "shipon-6e337.firebaseapp.com",
+  projectId: "shipon-6e337",
+  storageBucket: "shipon-6e337.firebasestorage.app",
+  messagingSenderId: "680199241257",
+  appId: "1:680199241257:web:1c79d5c20b3cd553582638"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ---------------- SPO নাম (একবার লিখলে ফোনেই সেভ থাকবে) ----------------
+function loadSpoName(){ try{ return localStorage.getItem('spo_name') || ''; }catch(e){ return ''; } }
+function saveSpoName(n){ try{ localStorage.setItem('spo_name', n); }catch(e){} }
+let SPO_NAME = loadSpoName();
+
+function ensureSpoName(){
+  if(!SPO_NAME){
+    const n = window.prompt('আপনার নাম লিখুন (এসপিও):', '');
+    if(n && n.trim()){ SPO_NAME = n.trim(); saveSpoName(SPO_NAME); }
+  }
+  document.getElementById('spoNameDisplay').textContent = SPO_NAME || '—';
+}
+function changeSpoName(){
+  const n = window.prompt('নাম পরিবর্তন করুন:', SPO_NAME || '');
+  if(n && n.trim()){
+    SPO_NAME = n.trim();
+    saveSpoName(SPO_NAME);
+    document.getElementById('spoNameDisplay').textContent = SPO_NAME;
+  }
+}
+document.getElementById('editSpoBtn').onclick = changeSpoName;
+
+// ---------------- state ----------------
+let routes = [];
+let retailers = [];    // {route, name, trader, address, mobile, currentDue, collections:[{date,amount}], id}
+let products  = [];    // {name, price, piecePrice, piecesPerCarton, code}
+let stocks    = [];    // {productName, qty}  -- কার্টুন এককে
+let invoices  = [];    // sales_invoices কালেকশন থেকে (ড্যাশবোর্ডের জন্য)
+let allOrders = [];     // online_orders (সব — pending + resolved), ইতিহাস দেখানোর জন্য
+let allCollections = []; // online_collections (সব — pending + resolved)
+let pendingOrders = []; // allOrders থেকে বের করা এখনো status:'pending' (স্টক রিজার্ভ হিসাবের জন্য)
+
+let flowMode = 'order';   // 'order' অথবা 'collection'
+let step = 0;            // 0 ড্যাশবোর্ড, 1 রুট, 2 রিটেইলার, 3 পণ্য/টাকা, 4 রিভিউ
+let selectedRoute = null;
+let selectedRetailer = null;
+let cart = {};            // productName -> {productName, cartonQty, pieceQty}
+let productSearch = '';
+let invalidProducts = new Set();
+let expandedActivityId = null;
+let collectionDraft = { amount: '', note: '' };
+let dashboardDate = null; // set on first render to today's ISO date
+
+const mainArea = document.getElementById('mainArea');
+const stepsBar = document.getElementById('stepsBar');
+const bottomBar = document.getElementById('bottomBar');
+const backBtn = document.getElementById('backBtn');
+const nextBtn = document.getElementById('nextBtn');
+const homeBtn = document.getElementById('homeBtn');
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+
+function getStepLabels(){
+  return flowMode === 'collection'
+    ? ['রুট', 'রিটেইলার', 'টাকা', 'রিভিউ']
+    : ['রুট', 'রিটেইলার', 'পণ্য', 'রিভিউ'];
+}
+
+function showToast(msg, type=''){
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2600);
+}
+
+function setConn(ok, msg){
+  connDot.className = 'conn-dot' + (ok ? '' : ' off');
+  connText.textContent = msg;
+}
+
+function updateOnlineStatus(){
+  if(!navigator.onLine){
+    setConn(false, 'ইন্টারনেট সংযোগ নেই ⚠️');
+  }
+}
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+
+// প্যাকেজিং থেকে প্রতি কার্টুনে কত পিস তা বের করা (অ্যাডমিন ফাইলের নিয়ম অনুযায়ী)
+function getPiecesPerCarton(product){
+  const stored = parseFloat(product?.piecesPerCarton || product?.pieces || product?.cartonPieces || 0) || 0;
+  const name = String(product?.name || '').toUpperCase().replace(/\s+/g, '');
+  const m = name.match(/(\d+(?:\.\d+)?)X(\d+(?:\.\d+)?)(?:X(\d+(?:\.\d+)?))?/);
+  if(m){
+    const first = parseFloat(m[1]) || 0;
+    const second = parseFloat(m[2]) || 0;
+    const third = m[3] ? parseFloat(m[3]) || 0 : 0;
+    if(third > 0) return first * second;
+    if(first > 0) return first;
+  }
+  return stored > 0 ? stored : 1;
+}
+
+function getPiecePrice(product){
+  const cartonPrice = Number(product?.price || 0) || 0;
+  const ppc = getPiecesPerCarton(product);
+  if(cartonPrice <= 0 || ppc <= 0) return Number(product?.piecePrice || 0) || 0;
+  return Math.round((cartonPrice / ppc) * 100) / 100;
+}
+
+// পণ্যের ফিজিক্যাল স্টক (কার্টুন এককে)
+function getPhysicalStockQty(productName){
+  const st = stocks.find(s=>s.productName===productName);
+  return st ? (Number(st.qty)||0) : 0;
+}
+
+// এখনো সিদ্ধান্ত হয়নি এমন (status: pending) অনলাইন অর্ডারগুলোতে এই পণ্যের
+// জন্য কত পরিমাণ "বুক" হয়ে আছে (কার্টুন এককে) — যাতে একই স্টক দুইবার
+// অর্ডার না হয়ে যায়, যতক্ষণ না অ্যাডমিন সেটা এপ্রুভ/বাতিল করেন।
+function getReservedQtyCartons(productName){
+  const prod = products.find(p=>p.name===productName);
+  const ppc = getPiecesPerCarton(prod);
+  let total = 0;
+  pendingOrders.forEach(o=>{
+    (o.items||[]).forEach(it=>{
+      if(it.productName===productName){
+        total += (Number(it.cartonQty)||0) + (Number(it.pieceQty)||0)/ppc;
+      }
+    });
+  });
+  return total;
+}
+
+// SR/SPO-কে দেখানো "আসলে কতটা অর্ডার করা যাবে" — ফিজিক্যাল স্টক বাদে
+// যা অন্য পেন্ডিং অর্ডারে বুক হয়ে আছে
+function getAvailableStockQty(productName){
+  return Math.max(0, getPhysicalStockQty(productName) - getReservedQtyCartons(productName));
+}
+
+function getOverStockAmount(name, cartonQty, pieceQty){
+  const p = products.find(x=>x.name===name);
+  if(!p) return 0;
+  const ppc = getPiecesPerCarton(p);
+  const availableCartons = getAvailableStockQty(name);
+  const requestedCartons = (Number(cartonQty)||0) + (Number(pieceQty)||0)/ppc;
+  return requestedCartons > availableCartons + 1e-9 ? (requestedCartons - availableCartons) : 0;
+}
+
+function getCurrentBanglaDate(){
+  const date = new Date();
+  const months = ["জানুয়ারি","ফেব্রুয়ারি","মার্চ","এপ্রিল","মে","জুন","জুলাই","আগস্ট","সেপ্টেম্বর","অক্টোবর","নভেম্বর","ডিসেম্বর"];
+  const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+  const toBn = v => String(v).replace(/[0-9]/g, d=>bn[Number(d)]);
+  return `${toBn(date.getDate())}-${months[date.getMonth()]}-${toBn(date.getFullYear())}`;
+}
+
+// অ্যাডমিন ফাইলের সাথে মিলিয়ে বাংলা/ISO তারিখ পার্স করা (ড্যাশবোর্ডের হিসাবের জন্য)
+function parseBanglaOrISODate(value){
+  if(!value) return null;
+  const str = String(value).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(str)) return new Date(str + 'T00:00:00');
+  const bn = {'০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9'};
+  const normalized = str.replace(/[০-৯]/g, c=>bn[c]);
+  const banglaMonths = ["জানুয়ারি","ফেব্রুয়ারি","মার্চ","এপ্রিল","মে","জুন","জুলাই","আগস্ট","সেপ্টেম্বর","অক্টোবর","নভেম্বর","ডিসেম্বর"];
+  const m1 = normalized.match(/^(\d{1,2})-([^\d-]+)-(\d{4})$/);
+  if(m1){
+    const idx = banglaMonths.indexOf(m1[2].trim());
+    if(idx !== -1) return new Date(`${m1[3]}-${String(idx+1).padStart(2,'0')}-${String(m1[1]).padStart(2,'0')}T00:00:00`);
+  }
+  const m2 = normalized.match(/(\d{1,2})-(\d{1,2})-(\d{4})/);
+  if(m2) return new Date(`${m2[3]}-${String(m2[2]).padStart(2,'0')}-${String(m2[1]).padStart(2,'0')}T00:00:00`);
+  return null;
+}
+function toLocalISODate(d){
+  if(!d || isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function getLocalISODate(){ return toLocalISODate(new Date()); }
+
+function renderStepsBar(){
+  if(step===0){ stepsBar.style.display = 'none'; homeBtn.style.display = 'none'; return; }
+  stepsBar.style.display = 'flex';
+  homeBtn.style.display = 'inline-block';
+  stepsBar.innerHTML = '';
+  getStepLabels().forEach((label, i)=>{
+    const n = i+1;
+    const tab = document.createElement('div');
+    tab.className = 'step-tab' + (n===step ? ' active' : '') + (n<step ? ' done' : '');
+    tab.innerHTML = `<span class="num">${n}</span>${label}`;
+    stepsBar.appendChild(tab);
+  });
+}
+
+homeBtn.onclick = ()=>{
+  step = 0; flowMode = 'order'; selectedRoute = null; selectedRetailer = null; cart = {}; productSearch=''; invalidProducts.clear();
+  renderStep();
+};
+
+// ---------------- auth + data load ----------------
+firebase.auth().signInAnonymously().catch(err=>{
+  console.warn('Anonymous auth failed:', err.message);
+}).finally(()=>{
+  startListening();
+});
+
+function startListening(){
+  db.collection('sales_system').doc('appData').onSnapshot((doc)=>{
+    if(navigator.onLine) setConn(true, 'সংযুক্ত');
+    if(doc.exists){
+      const data = doc.data();
+      routes = Array.isArray(data.routes) ? data.routes : [];
+      retailers = Array.isArray(data.retailers) ? data.retailers : [];
+      products = Array.isArray(data.products) ? data.products : [];
+      stocks = Array.isArray(data.stocks) ? data.stocks : [];
+    }
+    renderStep();
+  }, (err)=>{
+    console.error(err);
+    setConn(false, 'সংযোগ সমস্যা');
+    mainArea.innerHTML = `<div class="panel"><div class="empty-state">
+      ডেটা লোড করা যায়নি।<br/>Firestore Security Rules-এ এই অ্যাপের এক্সেস অনুমতি আছে কিনা চেক করুন।
+      <br/><span style="font-size:11px;color:var(--stamp)">${err.message||''}</span>
+      </div></div>`;
+  });
+
+  db.collection('sales_invoices').onSnapshot((snap)=>{
+    invoices = snap.docs.map(d=>d.data());
+    if(step===0) renderStep();
+  }, (err)=>console.error(err));
+
+  db.collection('online_orders').onSnapshot((snap)=>{
+    allOrders = snap.docs.map(d=>d.data());
+    pendingOrders = allOrders.filter(o=>!o.status || o.status==='pending');
+    if(step===0 || step===3) renderStep();
+  }, (err)=>console.error(err));
+
+  db.collection('online_collections').onSnapshot((snap)=>{
+    allCollections = snap.docs.map(d=>d.data());
+    if(step===0) renderStep();
+  }, (err)=>console.error(err));
+}
+
+// ---------------- step renderers ----------------
+function renderStep(){
+  renderStepsBar();
+  if(step===0) return renderDashboard();
+  if(step===1) return renderRouteStep();
+  if(step===2) return renderRetailerStep();
+  if(step===3) return flowMode==='collection' ? renderCollectionAmountStep() : renderProductStep();
+  if(step===4) return flowMode==='collection' ? renderCollectionReviewStep() : renderReviewStep();
+}
+
+// প্রদত্ত তারিখের (বা আজকের) জন্য বাংলা তারিখ স্ট্রিং বানানো
+function formatBanglaDate(dateObjOrISO){
+  const d = typeof dateObjOrISO === 'string' ? new Date(dateObjOrISO + 'T00:00:00') : dateObjOrISO;
+  const months = ["জানুয়ারি","ফেব্রুয়ারি","মার্চ","এপ্রিল","মে","জুন","জুলাই","আগস্ট","সেপ্টেম্বর","অক্টোবর","নভেম্বর","ডিসেম্বর"];
+  const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+  const toBn = v => String(v).replace(/[0-9]/g, x=>bn[Number(x)]);
+  return `${toBn(d.getDate())}-${months[d.getMonth()]}-${toBn(d.getFullYear())}`;
+}
+
+// অ্যাডমিন ফাইলের মতোই মোট স্টকের মূল্য (MRP থেকে ১৫% বাদ দিয়ে)
+function computeStockValue(){
+  const totalMRP = stocks.reduce((sum, st)=>{
+    const prod = products.find(p=>p.name===st.productName);
+    const cartonPrice = Number(prod?.price || 0) || 0;
+    return sum + (Number(st.qty||0)||0) * cartonPrice;
+  }, 0);
+  return totalMRP * 0.85;
+}
+
+function computeDashboardStats(dateISO){
+  const dayInvoices = invoices.filter(inv=>{
+    const parsed = parseBanglaOrISODate(inv.date || '');
+    return parsed && toLocalISODate(parsed) === dateISO;
+  });
+  const daySales = dayInvoices.reduce((s,inv)=>s+(Number(inv.totalAmount||0)||0), 0);
+
+  let dayCollectionTotal = 0, dayCollectionCount = 0;
+  retailers.forEach(ret=>{
+    (ret.collections||[]).forEach(c=>{
+      const d = parseBanglaOrISODate(c.date || '');
+      if(d && toLocalISODate(d) === dateISO){
+        dayCollectionTotal += Number(c.amount||0) || 0;
+        dayCollectionCount++;
+      }
+    });
+  });
+
+  const totalDue = retailers.reduce((s,r)=>s + Math.max(0, Number(r.currentDue||0)||0), 0);
+  const stockValue = computeStockValue();
+
+  return {
+    daySales, dayInvoiceCount: dayInvoices.length,
+    dayCollectionTotal, dayCollectionCount,
+    totalDue, stockValue
+  };
+}
+
+function money(v){ return '৳' + Math.round(v||0).toLocaleString('en-BD'); }
+
+function renderDashboard(){
+  bottomBar.style.display = 'none';
+  if(!dashboardDate) dashboardDate = getLocalISODate();
+
+  mainArea.innerHTML = `
+    <div class="panel" style="margin-bottom:12px;">
+      <div class="field-label">তারিখ বেছে নিন (সেল/কালেকশন/কার্যক্রম হিসাবের জন্য)</div>
+      <input type="date" id="dashDateInput" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;" value="${dashboardDate}" max="${getLocalISODate()}" />
+    </div>
+    <div id="statsContainer"></div>
+    <button class="big-order-btn" id="startOrderBtn">📦 অর্ডার জমা দিন <span class="arrow">→</span></button>
+    <button class="collect-btn" id="startCollectBtn">💰 কালেকশন জমা দিন <span class="arrow">→</span></button>
+    <div class="panel" style="margin-top:14px;">
+      <div class="field-label" id="activityLabel"></div>
+      <div id="activityList"></div>
+    </div>
+  `;
+  document.getElementById('dashDateInput').onchange = (e)=>{
+    dashboardDate = e.target.value || getLocalISODate();
+    renderDashboardStats();
+    renderActivityList();
+  };
+  document.getElementById('startOrderBtn').onclick = ()=>{
+    flowMode = 'order'; step = 1; renderStep();
+  };
+  document.getElementById('startCollectBtn').onclick = ()=>{
+    flowMode = 'collection'; collectionDraft = { amount: '', note: '' }; step = 1; renderStep();
+  };
+  renderDashboardStats();
+  renderActivityList();
+}
+
+function renderDashboardStats(){
+  const s = computeDashboardStats(dashboardDate);
+  const isToday = dashboardDate === getLocalISODate();
+  const dateLabel = isToday ? 'আজকের' : (formatBanglaDate(dashboardDate) + '-এর');
+  document.getElementById('statsContainer').innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="label">${dateLabel} মোট সেল</div>
+        <div class="value" style="color:var(--navy-2);">${money(s.daySales)}</div>
+        <div class="note">${s.dayInvoiceCount} টি ইনভয়েস</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">${dateLabel} কালেকশন</div>
+        <div class="value" style="color:var(--ok);">${money(s.dayCollectionTotal)}</div>
+        <div class="note">${s.dayCollectionCount} টি এন্ট্রি</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">মোট কাস্টমার বাকি</div>
+        <div class="value" style="color:var(--stamp);">${money(s.totalDue)}</div>
+        <div class="note">বর্তমান হিসাব অনুযায়ী</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">মোট পণ্যের স্টক মূল্য</div>
+        <div class="value" style="color:var(--gold);">${money(s.stockValue)}</div>
+      </div>
+    </div>`;
+  const lbl = document.getElementById('activityLabel');
+  if(lbl) lbl.textContent = isToday ? 'সাম্প্রতিক কার্যক্রম (আপনার পাঠানো)' : `${formatBanglaDate(dashboardDate)}-এর কার্যক্রম (আপনার পাঠানো)`;
+}
+
+function getMyActivity(){
+  const myOrders = allOrders.filter(o=>o.srName===SPO_NAME).map(o=>({
+    type:'order', id:o.id, date:o.date||'', createdAt:o.createdAt||0, status:o.status||'pending',
+    retailerLabel: (o.retailerTrader||o.retailerName||'—') + (o.retailerName && o.retailerTrader ? ' ('+o.retailerName+')' : ''),
+    route:o.route||'', items:o.items||[]
+  }));
+  const myCols = allCollections.filter(o=>o.srName===SPO_NAME).map(o=>({
+    type:'collection', id:o.id, date:o.date||'', createdAt:o.createdAt||0, status:o.status||'pending',
+    retailerLabel: (o.retailerTrader||o.retailerName||'—') + (o.retailerName && o.retailerTrader ? ' ('+o.retailerName+')' : ''),
+    route:o.route||'', amount:o.amount||0, note:o.note||''
+  }));
+  const all = [...myOrders, ...myCols];
+  const filtered = all.filter(item=>{
+    const d = parseBanglaOrISODate(item.date || '');
+    return d && toLocalISODate(d) === dashboardDate;
+  });
+  return filtered.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0, 50);
+}
+
+function statusMeta(status){
+  if(status==='invoiced' || status==='approved') return {cls:'ok', label:'✅ সফল হয়েছে'};
+  if(status==='rejected') return {cls:'rejected', label:'❌ বাতিল হয়েছে'};
+  return {cls:'pending', label:'⏳ পেন্ডিং'};
+}
+
+function toggleActivity(id){
+  expandedActivityId = (expandedActivityId===id) ? null : id;
+  renderActivityList();
+}
+
+function renderActivityList(){
+  const listEl = document.getElementById('activityList');
+  if(!listEl) return;
+  const items = getMyActivity();
+  if(items.length===0){
+    listEl.innerHTML = `<div class="empty-state">এই তারিখে কোনো অর্ডার বা কালেকশন পাঠানো হয়নি।</div>`;
+    return;
+  }
+  listEl.innerHTML = items.map(item=>{
+    const st = statusMeta(item.status);
+    const detail = item.type==='order'
+      ? item.items.map(it=>`${it.productName} — ${it.cartonQty? it.cartonQty+' কার্টুন' : ''}${it.cartonQty && it.pieceQty ? ' + ' : ''}${it.pieceQty? it.pieceQty+' পিস' : ''}`).join('<br/>')
+      : `জমার টাকা: ৳${Number(item.amount||0).toLocaleString('en-BD')}${item.note ? '<br/>নোট: '+item.note : ''}`;
+    return `
+      <div class="activity-row ${expandedActivityId===item.id ? 'expanded' : ''}" onclick="toggleActivity('${item.id}')">
+        <div class="a-top">
+          <div>
+            <div class="a-name">${item.retailerLabel}</div>
+            <div class="a-date">${item.route} · ${item.date} · ${item.type==='order' ? 'অর্ডার' : 'কালেকশন'}</div>
+          </div>
+          <span class="activity-status ${st.cls}">${st.label}</span>
+        </div>
+        <div class="activity-detail">${detail}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderRouteStep(){
+  bottomBar.style.display = 'none';
+  if(routes.length===0){
+    mainArea.innerHTML = `<div class="panel"><div class="empty-state">কোনো রুট পাওয়া যায়নি।</div></div>`;
+    return;
+  }
+  mainArea.innerHTML = `
+    <div class="panel">
+      <div class="field-label">রুট বেছে নিন</div>
+      <div class="option-list" id="routeList"></div>
+    </div>`;
+  const list = document.getElementById('routeList');
+  routes.forEach(r=>{
+    const btn = document.createElement('button');
+    btn.className = 'option-btn' + (selectedRoute===r ? ' selected' : '');
+    btn.innerHTML = `<span>${r}</span><span class="chev">‹</span>`;
+    btn.onclick = ()=>{
+      selectedRoute = r;
+      selectedRetailer = null;
+      step = 2;
+      renderStep();
+    };
+    list.appendChild(btn);
+  });
+}
+
+function formatMobile(m){
+  if(!m) return '';
+  const s = String(m).trim();
+  return s.startsWith('0') ? s : ('0' + s);
+}
+
+function renderRetailerStep(){
+  bottomBar.style.display = 'flex';
+  nextBtn.className = 'btn btn-primary';
+  nextBtn.textContent = 'পরে';
+  nextBtn.disabled = !selectedRetailer;
+  nextBtn.onclick = ()=>{ step=3; renderStep(); };
+  backBtn.onclick = ()=>{ step=1; renderStep(); };
+
+  const list = retailers.filter(r=>r.route===selectedRoute);
+  mainArea.innerHTML = `
+    <div class="panel">
+      <div class="field-label">"${selectedRoute}" রুটের রিটেইলার বেছে নিন</div>
+      <div class="option-list" id="retailerList"></div>
+    </div>`;
+  const wrap = document.getElementById('retailerList');
+  if(list.length===0){
+    wrap.innerHTML = `<div class="empty-state">এই রুটে কোনো রিটেইলার নেই।</div>`;
+    return;
+  }
+  list
+    .slice()
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+    .forEach(r=>{
+      const btn = document.createElement('button');
+      const isSel = selectedRetailer && selectedRetailer.id===r.id && selectedRetailer.name===r.name;
+      btn.className = 'option-btn' + (isSel ? ' selected' : '');
+      const mobileStr = formatMobile(r.mobile);
+      btn.innerHTML = `<span>${r.trader || r.name}<span class="sub-line">${r.name}${mobileStr ? ' · 📞 '+mobileStr : ''}</span></span><span class="chev">‹</span>`;
+      btn.onclick = ()=>{
+        selectedRetailer = r;
+        nextBtn.disabled = false;
+        renderRetailerStep();
+      };
+      wrap.appendChild(btn);
+    });
+}
+
+function renderProductStep(){
+  bottomBar.style.display = 'flex';
+  nextBtn.className = 'btn btn-primary';
+  backBtn.onclick = ()=>{ step=2; renderStep(); };
+
+  mainArea.innerHTML = `
+    <div class="panel">
+      <div class="field-label">স্টকে থাকা পণ্য থেকে পরিমাণ দিন</div>
+      <input class="search-box" id="prodSearch" placeholder="পণ্যের নাম লিখুন (যেমন: A লিখলে A দিয়ে শুরু পণ্য দেখাবে)…" />
+      <div id="prodListContainer"></div>
+    </div>`;
+
+  const searchInput = document.getElementById('prodSearch');
+  searchInput.value = productSearch;
+  searchInput.oninput = (e)=>{
+    productSearch = e.target.value;
+    renderProductListOnly();
+  };
+
+  renderProductListOnly();
+}
+
+function updateNextBtnForProducts(){
+  const cnt = Object.keys(cart).length;
+  nextBtn.textContent = cnt>0 ? `রিভিউ (${cnt})` : 'রিভিউ';
+  nextBtn.disabled = cnt===0 || invalidProducts.size>0;
+  nextBtn.onclick = ()=>{ step=4; renderStep(); };
+}
+
+function renderProductListOnly(){
+  const inStock = products.filter(p=>getAvailableStockQty(p.name) > 0);
+  const q = productSearch.trim().toLowerCase();
+  const filtered = q ? inStock.filter(p=>p.name.toLowerCase().startsWith(q)) : inStock;
+
+  const listEl = document.getElementById('prodListContainer');
+  updateNextBtnForProducts();
+
+  if(filtered.length===0){
+    listEl.innerHTML = `<div class="empty-state">${q ? '"'+q+'" দিয়ে শুরু কোনো পণ্য স্টকে পাওয়া যায়নি।' : 'স্টকে কোনো পণ্য পাওয়া যায়নি।'}</div>`;
+    return;
+  }
+
+  listEl.innerHTML = '';
+  filtered
+    .slice()
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .forEach(p=>{
+      const existing = cart[p.name] || {cartonQty:'', pieceQty:''};
+      const availCartons = getAvailableStockQty(p.name);
+      const ppc = getPiecesPerCarton(p);
+      const isLow = availCartons < 3;
+      const over = getOverStockAmount(p.name, existing.cartonQty, existing.pieceQty);
+      if(over>0) invalidProducts.add(p.name); else invalidProducts.delete(p.name);
+      const row = document.createElement('div');
+      row.className = 'product-row';
+      row.innerHTML = `
+        <div class="p-name">${p.name}</div>
+        <div class="p-stock ${isLow ? 'low' : ''}">স্টকে আছে: ${Math.floor(availCartons)} কার্টুন (~${Math.round(availCartons*ppc)} পিস)${isLow ? ' ⚠️ কম' : ''}</div>
+        <div class="qty-inputs">
+          <div class="qty-field carton">
+            <label>কার্টুন</label>
+            <input type="number" min="0" inputmode="numeric" data-name="${p.name}" data-kind="cartonQty" value="${existing.cartonQty || ''}" placeholder="কার্টুন" class="${over>0?'invalid':''}" />
+          </div>
+          <div class="qty-field piece">
+            <label>পিস</label>
+            <input type="number" min="0" inputmode="numeric" data-name="${p.name}" data-kind="pieceQty" value="${existing.pieceQty || ''}" placeholder="পিস" class="${over>0?'invalid':''}" />
+          </div>
+        </div>
+        <div class="stock-error" style="display:${over>0?'block':'none'};">স্টকের চেয়ে বেশি — সর্বোচ্চ ${Math.floor(availCartons)} কার্টুন (~${Math.round(availCartons*ppc)} পিস) দেওয়া যাবে</div>`;
+      listEl.appendChild(row);
+    });
+
+  updateNextBtnForProducts();
+
+  listEl.querySelectorAll('input[type="number"]').forEach(inp=>{
+    inp.oninput = (e)=>{
+      const name = e.target.dataset.name;
+      const kind = e.target.dataset.kind;
+      const val = Math.max(0, Number(e.target.value)||0);
+      if(!cart[name]) cart[name] = {productName: name, cartonQty:0, pieceQty:0};
+      cart[name][kind] = val;
+      if(!cart[name].cartonQty && !cart[name].pieceQty) delete cart[name];
+
+      const row = e.target.closest('.product-row');
+      const errBox = row.querySelector('.stock-error');
+      const c = cart[name] || {cartonQty:0, pieceQty:0};
+      const over = getOverStockAmount(name, c.cartonQty, c.pieceQty);
+      row.querySelectorAll('input[type="number"]').forEach(i=>i.classList.toggle('invalid', over>0));
+      errBox.style.display = over>0 ? 'block' : 'none';
+      if(over>0) invalidProducts.add(name); else invalidProducts.delete(name);
+
+      updateNextBtnForProducts();
+    };
+  });
+}
+
+function renderReviewStep(){
+  bottomBar.style.display = 'flex';
+  backBtn.onclick = ()=>{ step=3; renderStep(); };
+  nextBtn.textContent = 'অর্ডার সাবমিট করুন';
+  nextBtn.className = 'btn btn-primary ok';
+  nextBtn.disabled = false;
+  nextBtn.onclick = submitOrder;
+
+  const items = Object.values(cart);
+
+  let grandTotal = 0;
+  let rowsHtml = items.map((it, i)=>{
+    const prod = products.find(p=>p.name===it.productName);
+    const cartonPrice = Number(prod?.price || 0) || 0;
+    const piecePrice = prod ? getPiecePrice(prod) : 0;
+    const lineTotal = (it.cartonQty * cartonPrice) + (it.pieceQty * piecePrice);
+    grandTotal += lineTotal;
+    const qtyParts = [];
+    if(it.cartonQty) qtyParts.push(`${it.cartonQty} কার্টুন`);
+    if(it.pieceQty) qtyParts.push(`${it.pieceQty} পিস`);
+    const unitPrice = it.cartonQty ? cartonPrice : piecePrice;
+    const unitLabel = it.cartonQty ? '/কার্টুন' : '/পিস';
+    return `
+      <tr>
+        <td class="inv-td-name">${i+1}. ${it.productName}</td>
+        <td class="inv-td-num">${qtyParts.join(' + ')}</td>
+        <td class="inv-td-num">৳${unitPrice.toLocaleString('en-BD')}${unitLabel}</td>
+        <td class="inv-td-num inv-td-total">৳${lineTotal.toLocaleString('en-BD')}</td>
+      </tr>`;
+  }).join('');
+
+  mainArea.innerHTML = `
+    <div class="invoice-card">
+      <div class="invoice-head">
+        <div class="invoice-shop">মেসার্স ধুনট সিড এন্ড এগ্রো ট্রেডার্স</div>
+        <div class="invoice-sub">অর্ডার রিভিউ · এমআরপি অনুযায়ী</div>
+      </div>
+      <div class="invoice-meta">
+        <div><span>তারিখ</span><b>${getCurrentBanglaDate()}</b></div>
+        <div><span>এসপিও</span><b>${SPO_NAME}</b></div>
+        <div><span>রুট</span><b>${selectedRoute}</b></div>
+        <div><span>রিটেইলার</span><b>${selectedRetailer.trader || selectedRetailer.name}${selectedRetailer.trader && selectedRetailer.name ? ' ('+selectedRetailer.name+')' : ''}</b></div>
+      </div>
+      ${items.length ? `
+      <div class="invoice-table-wrap">
+        <table class="invoice-table">
+          <thead><tr><th class="inv-th-name">পণ্যের নাম</th><th>পরিমাণ</th><th>একক মূল্য</th><th>মোট</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+      <div class="invoice-total-row">
+        <span>সর্বমোট (এমআরপি)</span>
+        <span class="amt">৳${grandTotal.toLocaleString('en-BD')}</span>
+      </div>` : `<div class="empty-state">কোনো পণ্য যুক্ত করা হয়নি</div>`}
+    </div>`;
+}
+
+async function submitOrder(){
+  if(!navigator.onLine){
+    showToast('ইন্টারনেট সংযোগ নেই — সংযোগ ফিরলে আবার চেষ্টা করুন', 'error');
+    return;
+  }
+  const items = Object.values(cart);
+  if(items.length===0){
+    showToast('অন্তত একটি পণ্য যুক্ত করুন', 'error');
+    return;
+  }
+  const overItem = items.find(it => getOverStockAmount(it.productName, it.cartonQty, it.pieceQty) > 0);
+  if(overItem){
+    showToast(`"${overItem.productName}" স্টকের চেয়ে বেশি — ঠিক করে আবার চেষ্টা করুন`, 'error');
+    step = 3;
+    renderStep();
+    return;
+  }
+  nextBtn.disabled = true;
+  nextBtn.textContent = 'পাঠানো হচ্ছে…';
+  try{
+    const ref = db.collection('online_orders').doc();
+    const orderData = {
+      id: ref.id,
+      date: getCurrentBanglaDate(),
+      route: selectedRoute,
+      retailerTrader: selectedRetailer.trader || '',
+      retailerId: selectedRetailer.id || '',
+      retailerName: selectedRetailer.name || '',
+      items: items,
+      status: 'pending',
+      createdAt: Date.now(),
+      srName: SPO_NAME
+    };
+    await ref.set(orderData);
+    showToast('অর্ডার সাবমিট হয়েছে ✓', 'ok');
+    cart = {};
+    selectedRetailer = null;
+    invalidProducts.clear();
+    step = 0;
+    renderStep();
+  }catch(err){
+    console.error(err);
+    showToast('সাবমিট করা যায়নি — ' + (err.message||''), 'error');
+    nextBtn.disabled = false;
+    nextBtn.textContent = 'অর্ডার সাবমিট করুন';
+  }
+}
+
+function renderCollectionAmountStep(){
+  bottomBar.style.display = 'flex';
+  backBtn.onclick = ()=>{ step=2; renderStep(); };
+  nextBtn.className = 'btn btn-primary';
+  nextBtn.textContent = 'রিভিউ';
+  const due = Number(selectedRetailer.currentDue || 0);
+  const validAmount = Number(collectionDraft.amount||0) > 0 && Number(collectionDraft.amount||0) <= due;
+  nextBtn.disabled = !validAmount;
+  nextBtn.onclick = ()=>{ step=4; renderStep(); };
+
+  mainArea.innerHTML = `
+    <div class="panel">
+      <div class="field-label">${selectedRetailer.trader || selectedRetailer.name}${selectedRetailer.trader && selectedRetailer.name ? ' ('+selectedRetailer.name+')' : ''} — বর্তমান বাকি</div>
+      <div style="font-size:22px;font-weight:700;color:var(--stamp);margin-bottom:14px;">৳${due.toLocaleString('en-BD')}</div>
+      <div class="field-label">কত টাকা জমা নিয়েছেন?</div>
+      <input type="number" min="0" inputmode="numeric" id="collectAmountInput" placeholder="টাকার পরিমাণ" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:17px;font-family:inherit;font-weight:700;margin-bottom:8px;" value="${collectionDraft.amount || ''}" />
+      <button id="fullDueBtn" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);background:var(--paper-2);font-family:inherit;font-size:13px;margin-bottom:14px;cursor:pointer;">সম্পূর্ণ বাকি (৳${due.toLocaleString('en-BD')}) বসান</button>
+      <div class="field-label">নোট (ঐচ্ছিক — যেমন: বিকাশে, ব্যাংকে)</div>
+      <input type="text" id="collectNoteInput" placeholder="নোট লিখুন (না লিখলেও চলবে)" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;" value="${collectionDraft.note || ''}" />
+      <div id="collectAmountError" style="color:var(--stamp);font-size:12px;margin-top:8px;display:none;"></div>
+    </div>`;
+
+  const amountInput = document.getElementById('collectAmountInput');
+  const noteInput = document.getElementById('collectNoteInput');
+  const errBox = document.getElementById('collectAmountError');
+
+  function revalidate(){
+    const val = Number(amountInput.value||0);
+    collectionDraft.amount = amountInput.value;
+    if(val > due){
+      errBox.style.display = 'block';
+      errBox.textContent = `বর্তমান বাকির (৳${due.toLocaleString('en-BD')}) চেয়ে বেশি দেওয়া যাবে না`;
+      nextBtn.disabled = true;
+    }else if(val <= 0){
+      errBox.style.display = 'none';
+      nextBtn.disabled = true;
+    }else{
+      errBox.style.display = 'none';
+      nextBtn.disabled = false;
+    }
+  }
+  amountInput.oninput = revalidate;
+  noteInput.oninput = (e)=>{ collectionDraft.note = e.target.value; };
+  document.getElementById('fullDueBtn').onclick = ()=>{
+    amountInput.value = due;
+    collectionDraft.amount = String(due);
+    revalidate();
+  };
+  revalidate();
+}
+
+function renderCollectionReviewStep(){
+  bottomBar.style.display = 'flex';
+  backBtn.onclick = ()=>{ step=3; renderStep(); };
+  nextBtn.textContent = 'কালেকশন সাবমিট করুন';
+  nextBtn.className = 'btn btn-primary ok';
+  nextBtn.disabled = false;
+  nextBtn.onclick = submitCollection;
+
+  const due = Number(selectedRetailer.currentDue || 0);
+  const amount = Number(collectionDraft.amount || 0);
+  const remaining = Math.max(0, due - amount);
+
+  mainArea.innerHTML = `
+    <div class="invoice-card">
+      <div class="invoice-head">
+        <div class="invoice-shop">মেসার্স ধুনট সিড এন্ড এগ্রো ট্রেডার্স</div>
+        <div class="invoice-sub">কালেকশন রিভিউ</div>
+      </div>
+      <div class="invoice-meta">
+        <div><span>তারিখ</span><b>${getCurrentBanglaDate()}</b></div>
+        <div><span>এসপিও</span><b>${SPO_NAME}</b></div>
+        <div><span>রুট</span><b>${selectedRoute}</b></div>
+        <div><span>রিটেইলার</span><b>${selectedRetailer.trader || selectedRetailer.name}${selectedRetailer.trader && selectedRetailer.name ? ' ('+selectedRetailer.name+')' : ''}</b></div>
+      </div>
+      <div style="padding:16px;">
+        <div class="review-line" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;"><span style="color:var(--ink-soft);">আগের বাকি</span><span style="font-weight:600;">৳${due.toLocaleString('en-BD')}</span></div>
+        <div class="review-line" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;"><span style="color:var(--ink-soft);">জমার টাকা</span><span style="font-weight:600;color:var(--ok);">৳${amount.toLocaleString('en-BD')}</span></div>
+        <div class="review-line" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-top:1px dashed var(--line);margin-top:4px;"><span style="color:var(--ink-soft);">অ্যাপ্রুভ হলে বাকি থাকবে</span><span style="font-weight:700;">৳${remaining.toLocaleString('en-BD')}</span></div>
+        ${collectionDraft.note ? `<div style="margin-top:8px;font-size:13px;color:var(--ink-soft);">নোট: ${collectionDraft.note}</div>` : ''}
+      </div>
+      <div class="invoice-total-row" style="background:var(--gold-soft);border-top:2px solid var(--gold);">
+        <span>এই রিকোয়েস্টটা অ্যাডমিনের কাছে যাবে</span>
+        <span class="amt" style="color:var(--gold);">অ্যাপ্রুভাল বাকি</span>
+      </div>
+    </div>`;
+}
+
+async function submitCollection(){
+  if(!navigator.onLine){
+    showToast('ইন্টারনেট সংযোগ নেই — সংযোগ ফিরলে আবার চেষ্টা করুন', 'error');
+    return;
+  }
+  const amount = Number(collectionDraft.amount || 0);
+  const due = Number(selectedRetailer.currentDue || 0);
+  if(amount <= 0){
+    showToast('সঠিক টাকার পরিমাণ দিন', 'error');
+    return;
+  }
+  if(amount > due){
+    showToast('বর্তমান বাকির চেয়ে বেশি দেওয়া যাবে না', 'error');
+    step = 3;
+    renderStep();
+    return;
+  }
+  nextBtn.disabled = true;
+  nextBtn.textContent = 'পাঠানো হচ্ছে…';
+  try{
+    const ref = db.collection('online_collections').doc();
+    const reqData = {
+      id: ref.id,
+      date: getCurrentBanglaDate(),
+      route: selectedRoute,
+      retailerTrader: selectedRetailer.trader || '',
+      retailerId: selectedRetailer.id || '',
+      retailerName: selectedRetailer.name || '',
+      amount: amount,
+      note: collectionDraft.note || '',
+      status: 'pending',
+      createdAt: Date.now(),
+      srName: SPO_NAME
+    };
+    await ref.set(reqData);
+    showToast('কালেকশন রিকোয়েস্ট সাবমিট হয়েছে ✓', 'ok');
+    selectedRetailer = null;
+    collectionDraft = { amount:'', note:'' };
+    step = 0;
+    renderStep();
+  }catch(err){
+    console.error(err);
+    showToast('সাবমিট করা যায়নি — ' + (err.message||''), 'error');
+    nextBtn.disabled = false;
+    nextBtn.textContent = 'কালেকশন সাবমিট করুন';
+  }
+}
+
+ensureSpoName();
+updateOnlineStatus();
+renderStep();
+</script>
+</body>
+</html>
