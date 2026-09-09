@@ -408,6 +408,48 @@
   .toast.error{background:var(--stamp);}
   .toast.ok{background:var(--ok);}
 
+  .success-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(34,32,27,0.55);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:100;
+    padding:20px;
+  }
+  .success-box{
+    background:var(--card);
+    border-radius:16px;
+    padding:36px 28px;
+    text-align:center;
+    max-width:320px;
+    width:100%;
+    box-shadow:0 10px 30px rgba(0,0,0,0.25);
+  }
+  .success-check{
+    width:76px;
+    height:76px;
+    border-radius:50%;
+    background:var(--ok-soft);
+    color:var(--ok);
+    font-size:42px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin:0 auto 18px;
+  }
+  .success-title{
+    font-size:19px;
+    font-weight:700;
+    color:var(--ink);
+    margin-bottom:6px;
+  }
+  .success-sub{
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+
   .loading-dot{
     text-align:center;
     padding:30px;
@@ -577,6 +619,22 @@ function showToast(msg, type=''){
   t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(()=>t.remove(), 2600);
+}
+
+// সাবমিট সফল হলে বড় করে মাঝখানে টিক চিহ্ন দেখিয়ে তারপর হোমপেজে ফিরিয়ে দেওয়া
+function showSuccessPopup(title, subtitle, onDone){
+  const overlay = document.createElement('div');
+  overlay.className = 'success-overlay';
+  overlay.innerHTML = `
+    <div class="success-box">
+      <div class="success-check">✓</div>
+      <div class="success-title">${title}</div>
+      <div class="success-sub">${subtitle}</div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const finish = ()=>{ overlay.remove(); if(onDone) onDone(); };
+  overlay.onclick = finish;
+  setTimeout(finish, 1800);
 }
 
 function setConn(ok, msg){
@@ -1180,12 +1238,13 @@ async function submitOrder(){
       srName: SPO_NAME
     };
     await ref.set(orderData);
-    showToast('অর্ডার সাবমিট হয়েছে ✓', 'ok');
     cart = {};
     selectedRetailer = null;
     invalidProducts.clear();
-    step = 0;
-    renderStep();
+    showSuccessPopup('অর্ডার সাবমিট হয়েছে', 'অ্যাডমিনের কাছে নোটিফিকেশন চলে গেছে', ()=>{
+      step = 0;
+      renderStep();
+    });
   }catch(err){
     console.error(err);
     showToast('সাবমিট করা যায়নি — ' + (err.message||''), 'error');
@@ -1209,8 +1268,7 @@ function renderCollectionAmountStep(){
       <div class="field-label">${selectedRetailer.trader || selectedRetailer.name}${selectedRetailer.trader && selectedRetailer.name ? ' ('+selectedRetailer.name+')' : ''} — বর্তমান বাকি</div>
       <div style="font-size:22px;font-weight:700;color:var(--stamp);margin-bottom:14px;">৳${due.toLocaleString('en-BD')}</div>
       <div class="field-label">কত টাকা জমা নিয়েছেন?</div>
-      <input type="number" min="0" inputmode="numeric" id="collectAmountInput" placeholder="টাকার পরিমাণ" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:17px;font-family:inherit;font-weight:700;margin-bottom:8px;" value="${collectionDraft.amount || ''}" />
-      <button id="fullDueBtn" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);background:var(--paper-2);font-family:inherit;font-size:13px;margin-bottom:14px;cursor:pointer;">সম্পূর্ণ বাকি (৳${due.toLocaleString('en-BD')}) বসান</button>
+      <input type="number" min="0" inputmode="numeric" id="collectAmountInput" placeholder="টাকার পরিমাণ" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:17px;font-family:inherit;font-weight:700;margin-bottom:14px;" value="${collectionDraft.amount || ''}" />
       <div class="field-label">নোট (ঐচ্ছিক — যেমন: বিকাশে, ব্যাংকে)</div>
       <input type="text" id="collectNoteInput" placeholder="নোট লিখুন (না লিখলেও চলবে)" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;" value="${collectionDraft.note || ''}" />
       <div id="collectAmountError" style="color:var(--stamp);font-size:12px;margin-top:8px;display:none;"></div>
@@ -1237,11 +1295,6 @@ function renderCollectionAmountStep(){
   }
   amountInput.oninput = revalidate;
   noteInput.oninput = (e)=>{ collectionDraft.note = e.target.value; };
-  document.getElementById('fullDueBtn').onclick = ()=>{
-    amountInput.value = due;
-    collectionDraft.amount = String(due);
-    revalidate();
-  };
   revalidate();
 }
 
@@ -1317,11 +1370,12 @@ async function submitCollection(){
       srName: SPO_NAME
     };
     await ref.set(reqData);
-    showToast('কালেকশন রিকোয়েস্ট সাবমিট হয়েছে ✓', 'ok');
     selectedRetailer = null;
     collectionDraft = { amount:'', note:'' };
-    step = 0;
-    renderStep();
+    showSuccessPopup('কালেকশন সাবমিট হয়েছে', 'অ্যাডমিনের কাছে নোটিফিকেশন চলে গেছে', ()=>{
+      step = 0;
+      renderStep();
+    });
   }catch(err){
     console.error(err);
     showToast('সাবমিট করা যায়নি — ' + (err.message||''), 'error');
