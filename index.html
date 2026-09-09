@@ -450,6 +450,65 @@
     color:var(--ink-soft);
   }
 
+  .login-overlay{
+    position:fixed;
+    inset:0;
+    background:var(--navy);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:200;
+    padding:20px;
+  }
+  .login-box{
+    background:var(--card);
+    border-radius:16px;
+    padding:32px 26px;
+    width:100%;
+    max-width:340px;
+    text-align:center;
+    box-shadow:0 10px 30px rgba(0,0,0,0.3);
+  }
+  .login-shop{
+    font-size:16px;
+    font-weight:700;
+    color:var(--navy);
+    margin-bottom:4px;
+  }
+  .login-sub{
+    font-size:13px;
+    color:var(--ink-soft);
+    margin-bottom:20px;
+  }
+  .login-box input{
+    width:100%;
+    padding:12px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:15px;
+    font-family:inherit;
+    margin-bottom:10px;
+  }
+  .login-submit-btn{
+    width:100%;
+    padding:13px;
+    border:none;
+    border-radius:8px;
+    background:var(--stamp);
+    color:#fff;
+    font-size:15px;
+    font-weight:700;
+    font-family:inherit;
+    cursor:pointer;
+    margin-top:4px;
+  }
+  .login-error{
+    color:var(--stamp);
+    font-size:13px;
+    margin-top:10px;
+    font-weight:600;
+  }
+
   .loading-dot{
     text-align:center;
     padding:30px;
@@ -515,12 +574,25 @@
 </head>
 <body>
 
+<div id="loginOverlay" class="login-overlay">
+  <div class="login-box">
+    <div class="login-shop">মেসার্স ধুনট সিড এন্ড এগ্রো ট্রেডার্স</div>
+    <div class="login-sub">এসপিও অ্যাপ — লগইন করুন</div>
+    <input type="text" id="loginUser" placeholder="ইউজারনেম" autocomplete="username" />
+    <input type="password" id="loginPass" placeholder="পাসওয়ার্ড" autocomplete="current-password" />
+    <button id="loginBtn" class="login-submit-btn">লগইন করুন</button>
+    <div id="loginError" class="login-error" style="display:none;">ইউজারনেম বা পাসওয়ার্ড ভুল</div>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none;">
+
 <header class="app-top">
   <div class="row1">
     <h1>মেসার্স ধুনট সিড এন্ড এগ্রো ট্রেডার্স</h1>
     <button class="back-home-btn" id="homeBtn" style="display:none;">🏠 হোম</button>
   </div>
-  <div class="sub">এসপিও: <b id="spoNameDisplay">—</b><span class="spo-edit-link" id="editSpoBtn">✎ বদলান</span></div>
+  <div class="sub">এসপিও: <b id="spoNameDisplay">—</b><span class="spo-edit-link" id="editSpoBtn">✎ বদলান</span><span class="spo-edit-link" id="logoutBtn">🚪 লগআউট</span></div>
   <div class="sub"><span class="conn-dot" id="connDot"></span><span id="connText">সংযুক্ত হচ্ছে…</span></div>
 </header>
 
@@ -534,6 +606,8 @@
   <button class="btn btn-secondary" id="backBtn">পেছনে</button>
   <button class="btn btn-primary" id="nextBtn">পরে</button>
 </footer>
+
+</div>
 
 <!-- Firebase compat SDK — অ্যাডমিন ফাইলের সাথে একই ভার্সন (v8.10.1) -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -576,6 +650,12 @@ function changeSpoName(){
   }
 }
 document.getElementById('editSpoBtn').onclick = changeSpoName;
+document.getElementById('logoutBtn').onclick = ()=>{
+  if(confirm('লগআউট করতে চান?')){
+    setLoggedIn(false);
+    showLogin();
+  }
+};
 
 // ---------------- state ----------------
 let routes = [];
@@ -1384,9 +1464,54 @@ async function submitCollection(){
   }
 }
 
+function boot(){
 ensureSpoName();
 updateOnlineStatus();
 renderStep();
+}
+
+// ---------------- লগইন গেট ----------------
+// একই ডিভাইসে একবার লগইন করলে, লগআউট না করা পর্যন্ত আর লগইন চাইবে না
+const LOGIN_USER = 'spo';
+const LOGIN_PASS = 'spo456';
+
+function isLoggedIn(){ try{ return localStorage.getItem('spo_logged_in') === 'true'; }catch(e){ return false; } }
+function setLoggedIn(v){ try{ localStorage.setItem('spo_logged_in', v ? 'true' : 'false'); }catch(e){} }
+
+function showApp(){
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('appRoot').style.display = 'block';
+  boot();
+}
+
+function showLogin(){
+  document.getElementById('appRoot').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginError').style.display = 'none';
+}
+
+function attemptLogin(){
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value;
+  if(u === LOGIN_USER && p === LOGIN_PASS){
+    setLoggedIn(true);
+    showApp();
+  }else{
+    document.getElementById('loginError').style.display = 'block';
+  }
+}
+
+document.getElementById('loginBtn').onclick = attemptLogin;
+document.getElementById('loginPass').addEventListener('keydown', (e)=>{ if(e.key==='Enter') attemptLogin(); });
+document.getElementById('loginUser').addEventListener('keydown', (e)=>{ if(e.key==='Enter') attemptLogin(); });
+
+if(isLoggedIn()){
+  showApp();
+}else{
+  showLogin();
+}
 </script>
 </body>
 </html>
