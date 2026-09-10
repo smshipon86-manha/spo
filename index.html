@@ -676,6 +676,7 @@ let productSearch = '';
 let invalidProducts = new Set();
 let expandedActivityId = null;
 let collectionDraft = { amount: '', note: '' };
+let editingOrderId = null; // pending থাকা কোনো অর্ডার এডিট করা হলে তার Firestore আইডি এখানে থাকে
 let dashboardDate = null; // set on first render to today's ISO date
 
 const mainArea = document.getElementById('mainArea');
@@ -766,6 +767,10 @@ function getReservedQtyCartons(productName){
   const ppc = getPiecesPerCarton(prod);
   let total = 0;
   pendingOrders.forEach(o=>{
+    // যে অর্ডারটা এখন এডিট করা হচ্ছে, সেটার নিজের আগের বুকিং এই হিসাবে
+    // ধরা হচ্ছে না — নাহলে নিজেরই আগে করা অর্ডার নিজের সাথে যুক্ত হয়ে
+    // স্টক কম দেখাতো।
+    if(editingOrderId && o.id === editingOrderId) return;
     (o.items||[]).forEach(it=>{
       if(it.productName===productName){
         total += (Number(it.cartonQty)||0) + (Number(it.pieceQty)||0)/ppc;
@@ -836,7 +841,7 @@ function renderStepsBar(){
 }
 
 homeBtn.onclick = ()=>{
-  step = 0; flowMode = 'order'; selectedRoute = null; selectedRetailer = null; cart = {}; productSearch=''; invalidProducts.clear();
+  step = 0; flowMode = 'order'; selectedRoute = null; selectedRetailer = null; cart = {}; productSearch=''; invalidProducts.clear(); editingOrderId = null;
   renderStep();
 };
 
@@ -966,7 +971,7 @@ function renderDashboard(){
     renderActivityList();
   };
   document.getElementById('startOrderBtn').onclick = ()=>{
-    flowMode = 'order'; step = 1; renderStep();
+    flowMode = 'order'; editingOrderId = null; cart = {}; selectedRoute = null; selectedRetailer = null; step = 1; renderStep();
   };
   document.getElementById('startCollectBtn').onclick = ()=>{
     flowMode = 'collection'; collectionDraft = { amount: '', note: '' }; step = 1; renderStep();
@@ -1035,6 +1040,40 @@ function toggleActivity(id){
   renderActivityList();
 }
 
+// পেন্ডিং অবস্থায় থাকা কোনো অর্ডারে কাস্টমার পরে আরও পণ্য নিতে চাইলে,
+// এখান থেকে সেই অর্ডারটাই এডিট করে আরও পণ্য যুক্ত করে আবার সাবমিট করা
+// যাবে — নতুন আলাদা অর্ডার তৈরি হবে না, একই অর্ডারই আপডেট হবে।
+function editOrder(orderId){
+  const order = allOrders.find(o=>o.id===orderId);
+  if(!order) return;
+  if(order.status && order.status!=='pending'){
+    showToast('এই অর্ডারটা আর এডিট করা যাবে না (ইতিমধ্যে সিদ্ধান্ত হয়ে গেছে)', 'error');
+    return;
+  }
+  const ret = retailers.find(r=>r.id===order.retailerId) ||
+              retailers.find(r=>r.route===order.route && r.trader===order.retailerTrader);
+  if(!ret){
+    showToast('এই রিটেইলারকে আর তালিকায় পাওয়া যাচ্ছে না', 'error');
+    return;
+  }
+  editingOrderId = order.id;
+  selectedRoute = order.route;
+  selectedRetailer = ret;
+  cart = {};
+  (order.items||[]).forEach(it=>{
+    cart[it.productName] = {
+      productName: it.productName,
+      cartonQty: Number(it.cartonQty)||0,
+      pieceQty: Number(it.pieceQty)||0
+    };
+  });
+  flowMode = 'order';
+  productSearch = '';
+  invalidProducts.clear();
+  step = 3;
+  renderStep();
+}
+
 function renderActivityList(){
   const listEl = document.getElementById('activityList');
   if(!listEl) return;
@@ -1048,6 +1087,7 @@ function renderActivityList(){
     const detail = item.type==='order'
       ? item.items.map(it=>`${it.productName} — ${it.cartonQty? it.cartonQty+' কার্টুন' : ''}${it.cartonQty && it.pieceQty ? ' + ' : ''}${it.pieceQty? it.pieceQty+' পিস' : ''}`).join('<br/>')
       : `জমার টাকা: ৳${Number(item.amount||0).toLocaleString('en-BD')}${item.note ? '<br/>নোট: '+item.note : ''}`;
+    const canEdit = item.type==='order' && st.cls==='pending';
     return `
       <div class="activity-row ${expandedActivityId===item.id ? 'expanded' : ''}" onclick="toggleActivity('${item.id}')">
         <div class="a-top">
@@ -1057,7 +1097,7 @@ function renderActivityList(){
           </div>
           <span class="activity-status ${st.cls}">${st.label}</span>
         </div>
-        <div class="activity-detail">${detail}</div>
+        <div class="activity-detail">${detail}${canEdit ? `<br/><button type="button" class="btn" style="margin-top:8px;padding:8px 12px;font-size:13px;background:var(--navy);color:#fff;border:none;border-radius:6px;" onclick="event.stopPropagation(); editOrder('${item.id}')">✏️ এডিট করে আরও পণ্য যুক্ত করুন</button>` : ''}</div>
       </div>`;
   }).join('');
 }
@@ -1230,7 +1270,7 @@ function renderProductListOnly(){
 function renderReviewStep(){
   bottomBar.style.display = 'flex';
   backBtn.onclick = ()=>{ step=3; renderStep(); };
-  nextBtn.textContent = 'অর্ডার সাবমিট করুন';
+  nextBtn.textContent = editingOrderId ? 'অর্ডার আপডেট করুন' : 'অর্ডার সাবমিট করুন';
   nextBtn.className = 'btn btn-primary ok';
   nextBtn.disabled = false;
   nextBtn.onclick = submitOrder;
@@ -1280,6 +1320,10 @@ function renderReviewStep(){
       <div class="invoice-total-row">
         <span>সর্বমোট (এমআরপি)</span>
         <span class="amt">৳${grandTotal.toLocaleString('en-BD')}</span>
+      </div>
+      <div class="invoice-total-row" style="background:var(--paper-2);border-top:1px dashed var(--line);">
+        <span style="font-size:12.5px;color:var(--ink-soft);">সম্ভাব্য দাম (এমআরপি থেকে ১৬% বাদে)</span>
+        <span class="amt" style="font-size:16px;color:var(--ink-soft);">৳${Math.round(grandTotal*0.84).toLocaleString('en-BD')}</span>
       </div>` : `<div class="empty-state">কোনো পণ্য যুক্ত করা হয়নি</div>`}
     </div>`;
 }
@@ -1304,7 +1348,8 @@ async function submitOrder(){
   nextBtn.disabled = true;
   nextBtn.textContent = 'পাঠানো হচ্ছে…';
   try{
-    const ref = db.collection('online_orders').doc();
+    const isEdit = !!editingOrderId;
+    const ref = isEdit ? db.collection('online_orders').doc(editingOrderId) : db.collection('online_orders').doc();
     const orderData = {
       id: ref.id,
       date: getCurrentBanglaDate(),
@@ -1314,14 +1359,16 @@ async function submitOrder(){
       retailerName: selectedRetailer.name || '',
       items: items,
       status: 'pending',
-      createdAt: Date.now(),
+      createdAt: isEdit ? (allOrders.find(o=>o.id===editingOrderId)?.createdAt || Date.now()) : Date.now(),
+      updatedAt: isEdit ? Date.now() : null,
       srName: SPO_NAME
     };
     await ref.set(orderData);
     cart = {};
     selectedRetailer = null;
     invalidProducts.clear();
-    showSuccessPopup('অর্ডার সাবমিট হয়েছে', 'অ্যাডমিনের কাছে নোটিফিকেশন চলে গেছে', ()=>{
+    editingOrderId = null;
+    showSuccessPopup(isEdit ? 'অর্ডার আপডেট হয়েছে' : 'অর্ডার সাবমিট হয়েছে', 'অ্যাডমিনের কাছে নোটিফিকেশন চলে গেছে', ()=>{
       step = 0;
       renderStep();
     });
