@@ -1180,6 +1180,7 @@ function renderProductStep(){
     <div class="panel">
       <div class="field-label">স্টকে থাকা পণ্য থেকে পরিমাণ দিন</div>
       <input class="search-box" id="prodSearch" placeholder="পণ্যের নাম লিখুন (যেমন: A লিখলে A দিয়ে শুরু পণ্য দেখাবে)…" />
+      <div id="invalidProductsWarning"></div>
       <div id="prodListContainer"></div>
     </div>`;
 
@@ -1198,6 +1199,20 @@ function updateNextBtnForProducts(){
   nextBtn.textContent = cnt>0 ? `রিভিউ (${cnt})` : 'রিভিউ';
   nextBtn.disabled = cnt===0 || invalidProducts.size>0;
   nextBtn.onclick = ()=>{ step=4; renderStep(); };
+
+  // সার্চ করে অন্য পণ্য দেখতে গেলে আগে যোগ করা কোনো "স্টকের চেয়ে বেশি"
+  // পণ্য তালিকার বাইরে চলে যেতে পারে — তখন সেটা চোখে না পড়ায় "রিভিউ"
+  // বাটন সাদা/নিষ্ক্রিয় থেকে যায় অথচ বোঝা যায় না কেন। তাই এখানে
+  // স্পষ্টভাবে দেখিয়ে দেওয়া হচ্ছে ঠিক কোন পণ্যে এখনো সমস্যা আছে।
+  const warnEl = document.getElementById('invalidProductsWarning');
+  if (warnEl) {
+    if (invalidProducts.size > 0) {
+      const names = Array.from(invalidProducts).join(', ');
+      warnEl.innerHTML = `<div style="background:#fdecea;color:#b3261e;border:1px solid #f5c2c0;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;">⚠️ এই পণ্য(গুলো)-তে স্টকের চেয়ে বেশি লেখা আছে, ঠিক না করা পর্যন্ত রিভিউতে যাওয়া যাবে না: <b>${names}</b></div>`;
+    } else {
+      warnEl.innerHTML = '';
+    }
+  }
 }
 
 function renderProductListOnly(){
