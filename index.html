@@ -111,21 +111,39 @@
     font-family:inherit;
   }
 
-  /* ---------- mobile header fix ---------- */
+  /* ---------- mobile header + dashboard optimization ---------- */
   @media (max-width:600px){
-    header.app-top{padding:10px 12px 9px;}
-    .app-top .row1{gap:8px;align-items:center;}
-    .app-brand{gap:8px;min-width:0;width:100%;}
-    .app-brand-logo{width:42px;height:42px;flex-basis:42px;border-radius:7px;}
-    .app-top h1{font-size:14px;line-height:1.22;letter-spacing:0;}
-    .app-top .sub{font-size:11.5px;line-height:1.35;flex-wrap:wrap;row-gap:2px;margin-top:3px;}
-    .spo-edit-link{font-size:10.5px;}
+    header.app-top{padding:9px 10px 8px;}
+    .app-top .row1{gap:7px;align-items:center;min-width:0;}
+    .app-brand{gap:7px;min-width:0;width:100%;overflow:hidden;}
+    .app-brand-logo{width:40px;height:40px;flex:0 0 40px;border-radius:7px;}
+    .app-top h1{
+      font-size:13px;
+      line-height:1.15;
+      letter-spacing:0;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      min-width:0;
+      margin:0;
+    }
+    .app-top .sub{font-size:11px;line-height:1.3;flex-wrap:wrap;row-gap:2px;margin-top:3px;}
+    .spo-edit-link{font-size:10px;}
     .back-home-btn{padding:4px 7px;font-size:11px;flex:0 0 auto;}
+    #statsContainer{margin-top:4px;}
+    .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+    .stat-card{min-width:0;padding:11px 10px;border-radius:10px;}
+    .stat-card .label{font-size:11px;line-height:1.3;}
+    .stat-card .value{font-size:17px;line-height:1.2;white-space:nowrap;}
+    .stat-card .note{font-size:10px;line-height:1.25;}
   }
   @media (max-width:380px){
-    .app-top h1{font-size:13.5px;}
-    .app-brand-logo{width:40px;height:40px;flex-basis:40px;}
-    .app-top .sub{font-size:11px;}
+    .app-top h1{font-size:12px;}
+    .app-brand-logo{width:38px;height:38px;flex-basis:38px;}
+    .app-top .sub{font-size:10.5px;}
+    .stat-grid{gap:7px;}
+    .stat-card{padding:10px 8px;}
+    .stat-card .value{font-size:15px;}
   }
 
   .steps-bar{
@@ -720,6 +738,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const SPO_ALLOWED_UID = 'h7Py90GJZEbsHSFNKgZMpaTYIaG2';
 
 // ---------------- SPO নাম (একবার লিখলে ফোনেই সেভ থাকবে) ----------------
 function loadSpoName(){ try{ return localStorage.getItem('spo_name') || ''; }catch(e){ return ''; } }
@@ -741,9 +760,36 @@ function changeSpoName(){
     document.getElementById('spoNameDisplay').textContent = SPO_NAME;
   }
 }
+
+// ---------------- app/login state helpers ----------------
+// এই helper-গুলো login flow-এর প্রতিটি জায়গা থেকে ব্যবহার করা হয়।
+let appLoggedIn = false;
+
+function setLoggedIn(value){
+  appLoggedIn = !!value;
+  const app = document.getElementById('appRoot');
+  const login = document.getElementById('loginOverlay');
+  if(app) app.style.display = appLoggedIn ? 'block' : 'none';
+  if(login) login.style.display = appLoggedIn ? 'none' : 'flex';
+}
+
+function showApp(){
+  setLoggedIn(true);
+  ensureSpoName();
+  updateOnlineStatus();
+  renderStep();
+}
+
+function boot(){
+  ensureSpoName();
+  updateOnlineStatus();
+  renderStep();
+}
 document.getElementById('editSpoBtn').onclick = changeSpoName;
-document.getElementById('logoutBtn').onclick = ()=>{
+document.getElementById('logoutBtn').onclick = async ()=>{
   if(confirm('লগআউট করতে চান?')){
+    stopListening();
+    try{ await firebase.auth().signOut(); }catch(e){ console.error('Firebase logout failed:', e); }
     setLoggedIn(false);
     showLogin();
   }
@@ -769,7 +815,9 @@ let invalidProducts = new Set();
 let expandedActivityId = null;
 let collectionDraft = { amount: '', note: '' };
 let editingOrderId = null; // pending থাকা কোনো অর্ডার এডিট করা হলে তার Firestore আইডি এখানে থাকে
-let dashboardDate = null; // set on first render to today's ISO date
+let dashboardDate = null; // retained for compatibility; dashboard cards always mirror Admin's current-day cards
+let retailerCollectionsLive = [];
+let orderSubmitInProgress = false;
 
 const mainArea = document.getElementById('mainArea');
 const stepsBar = document.getElementById('stepsBar');
@@ -965,56 +1013,27 @@ homeBtn.onclick = ()=>{
 // অনুমতি দেওয়া হলে anonymous UID দিয়ে order/collection write করা যাবে না।
 let firebaseAuthReady = false;
 
+let stopDataListeners = [];
+function stopListening(){ stopDataListeners.forEach(fn=>{try{fn();}catch(e){}}); stopDataListeners=[]; }
+
 firebase.auth().onAuthStateChanged((user)=>{
-  firebaseAuthReady = true;
+  firebaseAuthReady=true;
   if(user){
-    // Firebase-এর আসল UID-টাই Firestore Rules-এর জন্য ব্যবহৃত হবে।
-    setLoggedIn(true);
-    document.getElementById('loginOverlay').style.display = 'none';
-    document.getElementById('appRoot').style.display = 'block';
-    boot();
-    startListening();
-  }else{
-    setLoggedIn(false);
-    showLogin();
-  }
+    if(user.uid!==SPO_ALLOWED_UID){ stopListening(); firebase.auth().signOut(); setLoggedIn(false); document.getElementById('loginError').textContent='এই Firebase account এই SPO অ্যাপের জন্য অনুমোদিত নয়।'; document.getElementById('loginError').style.display='block'; showLogin(); return; }
+    setLoggedIn(true); document.getElementById('loginOverlay').style.display='none'; document.getElementById('appRoot').style.display='block'; boot(); startListening();
+  }else{ stopListening(); setLoggedIn(false); showLogin(); }
 });
 
 function startListening(){
-  db.collection('sales_system').doc('appData').onSnapshot((doc)=>{
-    if(navigator.onLine) setConn(true, 'সংযুক্ত');
-    if(doc.exists){
-      const data = doc.data();
-      routes = Array.isArray(data.routes) ? data.routes : [];
-      retailers = Array.isArray(data.retailers) ? data.retailers : [];
-      products = Array.isArray(data.products) ? data.products : [];
-      stocks = Array.isArray(data.stocks) ? data.stocks : [];
-    }
-    renderStep();
-  }, (err)=>{
-    console.error(err);
-    setConn(false, 'সংযোগ সমস্যা');
-    mainArea.innerHTML = `<div class="panel"><div class="empty-state">
-      ডেটা লোড করা যায়নি।<br/>Firestore Security Rules-এ এই অ্যাপের এক্সেস অনুমতি আছে কিনা চেক করুন।
-      <br/><span style="font-size:11px;color:var(--stamp)">${err.message||''}</span>
-      </div></div>`;
-  });
-
-  db.collection('sales_invoices').onSnapshot((snap)=>{
-    invoices = snap.docs.map(d=>d.data());
-    if(step===0) renderStep();
-  }, (err)=>console.error(err));
-
-  db.collection('online_orders').onSnapshot((snap)=>{
-    allOrders = snap.docs.map(d=>d.data());
-    pendingOrders = allOrders.filter(o=>!o.status || o.status==='pending');
-    if(step===0 || step===3) renderStep();
-  }, (err)=>console.error(err));
-
-  db.collection('online_collections').onSnapshot((snap)=>{
-    allCollections = snap.docs.map(d=>d.data());
-    if(step===0) renderStep();
-  }, (err)=>console.error(err));
+  stopListening(); const authUser=firebase.auth().currentUser; if(!authUser) return;
+  const unsubApp=db.collection('sales_system').doc('appData').onSnapshot((doc)=>{ if(navigator.onLine) setConn(true,'সংযুক্ত'); if(doc.exists){const data=doc.data(); routes=Array.isArray(data.routes)?data.routes:[]; retailers=Array.isArray(data.retailers)?data.retailers:[]; products=Array.isArray(data.products)?data.products:[]; stocks=Array.isArray(data.stocks)?data.stocks:[];} renderStep(); },(err)=>{console.error('appData read error:',err);setConn(false,'ডেটা পড়ার সমস্যা');});
+  const unsubInvoices=db.collection('sales_invoices').onSnapshot((snap)=>{invoices=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('invoice read error:',err));
+  const unsubOrders=db.collection('online_orders').where('createdByUid','==',authUser.uid).onSnapshot((snap)=>{allOrders=snap.docs.map(d=>d.data());pendingOrders=allOrders.filter(o=>!o.status||o.status==='pending');if(step===0||step===3)renderStep();},(err)=>console.error('online_orders read error:',err));
+  const unsubCollections=db.collection('online_collections').where('createdByUid','==',authUser.uid).onSnapshot((snap)=>{allCollections=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('online_collections read error:',err));
+  // Admin Dashboard-এর কালেকশন কার্ডে ব্যবহৃত নতুন retailer_collections-ও লাইভ নেওয়া হচ্ছে,
+  // যাতে SPO-র Dashboard-এ একই উৎসের হিসাব দেখা যায়।
+  const unsubRetailerCollections=db.collection('retailer_collections').onSnapshot((snap)=>{retailerCollectionsLive=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('retailer_collections read error:',err));
+  stopDataListeners=[unsubApp,unsubInvoices,unsubOrders,unsubCollections,unsubRetailerCollections];
 }
 
 // ---------------- step renderers ----------------
@@ -1046,10 +1065,12 @@ function computeStockValue(){
   return totalMRP * 0.85;
 }
 
-function computeDashboardStats(dateISO){
+function computeDashboardStats(){
+  // Admin Dashboard-এর ৪টি কার্ডের একই ক্রম, একই উৎস ও একই হিসাব রাখা হয়েছে।
+  const today = getLocalISODate();
   const dayInvoices = invoices.filter(inv=>{
     const parsed = parseBanglaOrISODate(inv.date || '');
-    return parsed && toLocalISODate(parsed) === dateISO;
+    return parsed && toLocalISODate(parsed) === today;
   });
   const daySales = dayInvoices.reduce((s,inv)=>s+(Number(inv.totalAmount||0)||0), 0);
 
@@ -1057,33 +1078,45 @@ function computeDashboardStats(dateISO){
   retailers.forEach(ret=>{
     (ret.collections||[]).forEach(c=>{
       const d = parseBanglaOrISODate(c.date || '');
-      if(d && toLocalISODate(d) === dateISO){
+      if(d && toLocalISODate(d) === today){
         dayCollectionTotal += Number(c.amount||0) || 0;
         dayCollectionCount++;
       }
     });
   });
+  (retailerCollectionsLive || []).forEach(c=>{
+    const d = parseBanglaOrISODate(c.date || '');
+    if(d && toLocalISODate(d) === today){
+      dayCollectionTotal += Number(c.amount||0) || 0;
+      dayCollectionCount++;
+    }
+  });
 
   const totalDue = retailers.reduce((s,r)=>s + Math.max(0, Number(r.currentDue||0)||0), 0);
-  const stockValue = computeStockValue();
+  const stockValueMRP = stocks.reduce((sum, st)=>{
+    const prod = products.find(p=>p.name===st.productName);
+    const cartonEquivalent = Math.max(0, Number(st.qty||0) || 0);
+    const cartonPrice = Number(prod?.price || prod?.cartonPrice || 0) || 0;
+    return sum + cartonEquivalent * cartonPrice;
+  }, 0);
+  const stockValue = stockValueMRP * 0.85;
 
   return {
     daySales, dayInvoiceCount: dayInvoices.length,
+    stockValue,
     dayCollectionTotal, dayCollectionCount,
-    totalDue, stockValue
+    totalDue
   };
 }
 
-function money(v){ return '৳' + Math.round(v||0).toLocaleString('en-BD'); }
+function money(v){ return Math.round(v||0).toLocaleString('bn-BD') + ' ৳'; }
 
 function renderDashboard(){
   bottomBar.style.display = 'none';
-  if(!dashboardDate) dashboardDate = getLocalISODate();
-
   mainArea.innerHTML = `
     <div class="panel" style="margin-bottom:12px;">
-      <div class="field-label">তারিখ বেছে নিন (সেল/কালেকশন/কার্যক্রম হিসাবের জন্য)</div>
-      <input type="date" id="dashDateInput" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:inherit;font-size:14px;" value="${dashboardDate}" max="${getLocalISODate()}" />
+      <div class="field-label">আজকের ব্যবসার গুরুত্বপূর্ণ তথ্য</div>
+      <div style="font-size:12px;color:var(--ink-soft);margin-top:2px;">অ্যাডমিন ড্যাশবোর্ডের কার্ডের মতোই বর্তমান দিনের হিসাব</div>
     </div>
     <div id="statsContainer"></div>
     <button class="big-order-btn" id="startOrderBtn">📦 অর্ডার জমা দিন <span class="arrow">→</span></button>
@@ -1093,12 +1126,8 @@ function renderDashboard(){
       <div id="activityList"></div>
     </div>
   `;
-  document.getElementById('dashDateInput').onchange = (e)=>{
-    dashboardDate = e.target.value || getLocalISODate();
-    renderDashboardStats();
-    renderActivityList();
-  };
   document.getElementById('startOrderBtn').onclick = ()=>{
+    if(orderSubmitInProgress) return;
     flowMode = 'order'; editingOrderId = null; cart = {}; selectedRoute = null; selectedRetailer = null; step = 1; renderStep();
   };
   document.getElementById('startCollectBtn').onclick = ()=>{
@@ -1109,33 +1138,32 @@ function renderDashboard(){
 }
 
 function renderDashboardStats(){
-  const s = computeDashboardStats(dashboardDate);
-  const isToday = dashboardDate === getLocalISODate();
-  const dateLabel = isToday ? 'আজকের' : (formatBanglaDate(dashboardDate) + '-এর');
+  const s = computeDashboardStats();
   document.getElementById('statsContainer').innerHTML = `
     <div class="stat-grid">
       <div class="stat-card">
-        <div class="label">${dateLabel} মোট সেল</div>
+        <div class="label">আজকের মোট বিক্রি</div>
         <div class="value" style="color:var(--navy-2);">${money(s.daySales)}</div>
-        <div class="note">${s.dayInvoiceCount} টি ইনভয়েস</div>
+        <div class="note">${s.dayInvoiceCount.toLocaleString('bn-BD')}টি ইনভয়েস</div>
       </div>
       <div class="stat-card">
-        <div class="label">${dateLabel} কালেকশন</div>
+        <div class="label">মোট স্টকের মূল্য</div>
+        <div class="value" style="color:var(--gold);">${money(s.stockValue)}</div>
+        <div class="note">বর্তমান কার্টুন মূল্য অনুযায়ী</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">আজকের মোট কালেকশন</div>
         <div class="value" style="color:var(--ok);">${money(s.dayCollectionTotal)}</div>
-        <div class="note">${s.dayCollectionCount} টি এন্ট্রি</div>
+        <div class="note">${s.dayCollectionCount.toLocaleString('bn-BD')}টি এন্ট্রি</div>
       </div>
       <div class="stat-card">
         <div class="label">মোট কাস্টমার বাকি</div>
         <div class="value" style="color:var(--stamp);">${money(s.totalDue)}</div>
-        <div class="note">বর্তমান হিসাব অনুযায়ী</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">মোট পণ্যের স্টক মূল্য</div>
-        <div class="value" style="color:var(--gold);">${money(s.stockValue)}</div>
+        <div class="note">বর্তমান হিসাব অনুযায়ী</div>
       </div>
     </div>`;
   const lbl = document.getElementById('activityLabel');
-  if(lbl) lbl.textContent = isToday ? 'সাম্প্রতিক কার্যক্রম (আপনার পাঠানো)' : `${formatBanglaDate(dashboardDate)}-এর কার্যক্রম (আপনার পাঠানো)`;
+  if(lbl) lbl.textContent = 'সাম্প্রতিক কার্যক্রম (আপনার পাঠানো)';
 }
 
 function getMyActivity(){
@@ -1472,230 +1500,72 @@ function renderReviewStep(){
 }
 
 async function submitOrder(){
-  const authUser = firebase.auth().currentUser;
-  if(!authUser){
-    showToast('Firebase লগইন নেই — আবার লগইন করুন', 'error');
-    showLogin();
-    return;
+  // একবার ক্লিক করার পর request শেষ না হওয়া পর্যন্ত দ্বিতীয়বার submit চলবে না।
+  if(orderSubmitInProgress) return;
+  orderSubmitInProgress = true;
+  const authUser=firebase.auth().currentUser;
+  if(!authUser){orderSubmitInProgress=false;showToast('Firebase লগইন নেই — আবার লগইন করুন','error');showLogin();return;}
+  if(authUser.uid!==SPO_ALLOWED_UID){orderSubmitInProgress=false;showToast('এই Firebase account এই SPO অ্যাপের জন্য অনুমোদিত নয়','error');await firebase.auth().signOut();return;}
+  if(!navigator.onLine){orderSubmitInProgress=false;showToast('ইন্টারনেট সংযোগ নেই — আবার চেষ্টা করুন','error');return;}
+  const items=Object.values(cart);
+  if(!items.length){orderSubmitInProgress=false;showToast('অন্তত একটি পণ্য যুক্ত করুন','error');return;}
+  const overItem=items.find(it=>getOverStockAmount(it.productName,it.cartonQty,it.pieceQty)>0);
+  if(overItem){orderSubmitInProgress=false;showToast(`"${overItem.productName}" স্টকের চেয়ে বেশি — ঠিক করে আবার চেষ্টা করুন`,'error');step=3;renderStep();return;}
+
+  nextBtn.disabled=true;
+  nextBtn.textContent='পাঠানো হচ্ছে…';
+
+  // Fullscreen loading overlay ব্যবহার করা হচ্ছে না; diagnosis সরাসরি দৃশ্যমান থাকবে।
+  let box=document.getElementById('orderSubmitStatusBox');
+  if(!box){
+    box=document.createElement('div');
+    box.id='orderSubmitStatusBox';
+    box.style.cssText='position:fixed;left:12px;right:12px;bottom:14px;z-index:100000;background:#fff;border:2px solid #d08a00;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-family:inherit;color:#222;';
+    document.body.appendChild(box);
   }
-  if(!navigator.onLine){
-    showToast('ইন্টারনেট সংযোগ নেই — সংযোগ ফিরলে আবার চেষ্টা করুন', 'error');
-    return;
-  }
-  const items = Object.values(cart);
-  if(items.length===0){
-    showToast('অন্তত একটি পণ্য যুক্ত করুন', 'error');
-    return;
-  }
-  const overItem = items.find(it => getOverStockAmount(it.productName, it.cartonQty, it.pieceQty) > 0);
-  if(overItem){
-    showToast(`"${overItem.productName}" স্টকের চেয়ে বেশি — ঠিক করে আবার চেষ্টা করুন`, 'error');
-    step = 3;
-    renderStep();
-    return;
-  }
-  nextBtn.disabled = true;
-  nextBtn.textContent = 'পাঠানো হচ্ছে…';
-  startSubmitLoading('অর্ডারটি অ্যাডমিনের কাছে পাঠানো হচ্ছে…');
+  box.innerHTML='<div style="font-size:16px;font-weight:800;">অর্ডার পাঠানো হচ্ছে…</div><div id="orderSubmitStatusText" style="margin-top:6px;font-size:13px;line-height:1.5;">Firebase-এর response-এর জন্য অপেক্ষা করছি।</div>';
+
+  let finished=false;
+  let timer5=null,timer12=null;
+  const cleanup=()=>{if(timer5)clearTimeout(timer5);if(timer12)clearTimeout(timer12);timer5=null;timer12=null;orderSubmitInProgress=false;nextBtn.disabled=false;nextBtn.textContent='অর্ডার সাবমিট করুন';};
+  const showDiag=(code,msg)=>{
+    cleanup();
+    let b=document.getElementById('orderSubmitStatusBox');
+    if(!b){b=document.createElement('div');b.id='orderSubmitStatusBox';b.style.cssText='position:fixed;left:12px;right:12px;bottom:14px;z-index:100000;background:#fff;border:2px solid #b42318;border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-family:inherit;color:#222;';document.body.appendChild(b);}
+    const c=String(code||'unknown-error').replace(/</g,'&lt;');
+    const m=String(msg||'অজানা error').replace(/</g,'&lt;');
+    b.style.borderColor='#b42318';
+    b.innerHTML='<div style="font-size:17px;font-weight:800;color:#b42318;">অর্ডার পাঠানো যায়নি</div><div style="margin-top:7px;font-size:14px;line-height:1.6;"><b>Firebase error code:</b> '+c+'<br><b>কারণ:</b> '+m+'</div><button type="button" style="margin-top:10px;padding:9px 14px;border:0;border-radius:8px;background:#b42318;color:#fff;font-family:inherit;" onclick="this.parentElement.remove()">ঠিক আছে</button>';
+    console.error('ORDER SUBMIT DIAGNOSIS:',code,msg);
+  };
+
   try{
-    const isEdit = !!editingOrderId;
-    const ref = isEdit ? db.collection('online_orders').doc(editingOrderId) : db.collection('online_orders').doc();
-    const orderData = {
-      id: ref.id,
-      date: getCurrentBanglaDate(),
-      route: selectedRoute,
-      retailerTrader: selectedRetailer.trader || '',
-      retailerId: selectedRetailer.id || '',
-      retailerName: selectedRetailer.name || '',
-      items: items,
-      status: 'pending',
-      createdAt: isEdit ? (allOrders.find(o=>o.id===editingOrderId)?.createdAt || Date.now()) : Date.now(),
-      updatedAt: isEdit ? Date.now() : null,
-      srName: SPO_NAME,
-      createdByUid: isEdit ? (allOrders.find(o=>o.id===editingOrderId)?.createdByUid || authUser.uid) : authUser.uid
-    };
+    const isEdit=!!editingOrderId;
+    const oldOrder=isEdit?allOrders.find(o=>o.id===editingOrderId):null;
+    if(isEdit&&oldOrder&&oldOrder.createdByUid&&oldOrder.createdByUid!==authUser.uid){throw Object.assign(new Error('এই অর্ডারটি আপনার account-এর নয়।'),{code:'app/not-owner'});}
+    const ref=isEdit?db.collection('online_orders').doc(editingOrderId):db.collection('online_orders').doc();
+    const orderData={id:ref.id,date:getCurrentBanglaDate(),route:selectedRoute,retailerTrader:selectedRetailer.trader||'',retailerId:selectedRetailer.id||'',retailerName:selectedRetailer.name||'',items:items,status:'pending',createdAt:isEdit?(oldOrder?.createdAt||Date.now()):Date.now(),updatedAt:isEdit?Date.now():null,srName:SPO_NAME,createdByUid:authUser.uid};
+
+    timer5=setTimeout(()=>{if(finished)return;const t=document.getElementById('orderSubmitStatusText');if(t)t.innerHTML='<b>⚠️ ৫ সেকেন্ড হয়ে গেছে।</b> Firebase এখনো response দেয়নি। আর একটু অপেক্ষা করছি…';nextBtn.textContent='Firebase response আসছে…';},5000);
+    timer12=setTimeout(()=>{if(finished)return;showDiag('app/order-write-timeout','Firebase-এ অর্ডার লেখার response ১২ সেকেন্ডেও আসেনি। Firestore Rules, Firebase connection অথবা network সমস্যা হতে পারে।');},12000);
+
+    console.log('ORDER SUBMIT START',{docId:ref.id,uid:authUser.uid});
     await ref.set(orderData);
-    stopSubmitLoading();
-    cart = {};
-    selectedRetailer = null;
-    invalidProducts.clear();
-    editingOrderId = null;
-    showSuccessPopup(isEdit ? 'অর্ডার আপডেট হয়েছে' : 'অর্ডার সাবমিট হয়েছে', 'অ্যাডমিনের কাছে নোটিফিকেশন চলে গেছে', ()=>{
-      step = 0;
-      renderStep();
-    });
+    if(finished)return;
+    finished=true;
+    cleanup();
+    const b=document.getElementById('orderSubmitStatusBox');if(b)b.remove();
+    cart={};selectedRetailer=null;invalidProducts.clear();editingOrderId=null;
+    showSuccessPopup(isEdit?'অর্ডার আপডেট হয়েছে':'অর্ডার সাবমিট হয়েছে','অ্যাডমিনের কাছে নোটিফিকেশন চলে গেছে',()=>{step=0;renderStep();});
   }catch(err){
-    console.error(err);
-    stopSubmitLoading();
-    showToast('সাবমিট করা যায়নি — ' + (err.message||''), 'error');
-    nextBtn.disabled = false;
-    nextBtn.textContent = 'অর্ডার সাবমিট করুন';
+    if(finished)return;
+    finished=true;
+    const code=err&&err.code?String(err.code):'unknown-error';
+    let msg=err&&err.message?String(err.message):'অজানা Firebase error';
+    if(code==='permission-denied'||code==='app/permission-denied'||/permission-denied|missing or insufficient permissions|permission/i.test(msg))msg='Firestore Security Rules এই SPO account-কে online_orders-এ অর্ডার লেখার অনুমতি দিচ্ছে না।';
+    else if(code==='unauthenticated'||/unauthenticated/i.test(msg))msg='Firebase login session পাওয়া যাচ্ছে না। আবার লগইন করুন।';
+    showDiag(code,msg);
   }
-}
-
-function renderCollectionAmountStep(){
-  bottomBar.style.display = 'flex';
-  backBtn.onclick = ()=>{ step=2; renderStep(); };
-  nextBtn.className = 'btn btn-primary';
-  nextBtn.textContent = 'রিভিউ';
-  const due = Number(selectedRetailer.currentDue || 0);
-  const validAmount = Number(collectionDraft.amount||0) > 0 && Number(collectionDraft.amount||0) <= due;
-  nextBtn.disabled = !validAmount;
-  nextBtn.onclick = ()=>{ step=4; renderStep(); };
-
-  mainArea.innerHTML = `
-    <div class="panel">
-      <div class="field-label">${selectedRetailer.trader || selectedRetailer.name}${selectedRetailer.trader && selectedRetailer.name ? ' ('+selectedRetailer.name+')' : ''} — বর্তমান বাকি</div>
-      <div style="font-size:22px;font-weight:700;color:var(--stamp);margin-bottom:14px;">৳${due.toLocaleString('en-BD')}</div>
-      <div class="field-label">কত টাকা জমা নিয়েছেন?</div>
-      <input type="number" min="0" inputmode="numeric" id="collectAmountInput" placeholder="টাকার পরিমাণ" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;font-size:17px;font-family:inherit;font-weight:700;margin-bottom:14px;" value="${collectionDraft.amount || ''}" />
-      <div class="field-label">নোট (ঐচ্ছিক — যেমন: বিকাশে, ব্যাংকে)</div>
-      <input type="text" id="collectNoteInput" placeholder="নোট লিখুন (না লিখলেও চলবে)" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:14px;font-family:inherit;" value="${collectionDraft.note || ''}" />
-      <div id="collectAmountError" style="color:var(--stamp);font-size:12px;margin-top:8px;display:none;"></div>
-    </div>`;
-
-  const amountInput = document.getElementById('collectAmountInput');
-  const noteInput = document.getElementById('collectNoteInput');
-  const errBox = document.getElementById('collectAmountError');
-
-  function revalidate(){
-    const val = Number(amountInput.value||0);
-    collectionDraft.amount = amountInput.value;
-    if(val > due){
-      errBox.style.display = 'block';
-      errBox.textContent = `বর্তমান বাকির (৳${due.toLocaleString('en-BD')}) চেয়ে বেশি দেওয়া যাবে না`;
-      nextBtn.disabled = true;
-    }else if(val <= 0){
-      errBox.style.display = 'none';
-      nextBtn.disabled = true;
-    }else{
-      errBox.style.display = 'none';
-      nextBtn.disabled = false;
-    }
-  }
-  amountInput.oninput = revalidate;
-  noteInput.oninput = (e)=>{ collectionDraft.note = e.target.value; };
-  revalidate();
-}
-
-function renderCollectionReviewStep(){
-  bottomBar.style.display = 'flex';
-  backBtn.onclick = ()=>{ step=3; renderStep(); };
-  nextBtn.textContent = 'কালেকশন সাবমিট করুন';
-  nextBtn.className = 'btn btn-primary ok';
-  nextBtn.disabled = false;
-  nextBtn.onclick = submitCollection;
-
-  const due = Number(selectedRetailer.currentDue || 0);
-  const amount = Number(collectionDraft.amount || 0);
-  const remaining = Math.max(0, due - amount);
-
-  mainArea.innerHTML = `
-    <div class="invoice-card">
-      <div class="invoice-head">
-        <div class="invoice-shop">মেসার্স ধুনট সিড এন্ড এগ্রো ট্রেডার্স</div>
-        <div class="invoice-sub">কালেকশন রিভিউ</div>
-      </div>
-      <div class="invoice-meta">
-        <div><span>তারিখ</span><b>${getCurrentBanglaDate()}</b></div>
-        <div><span>এসপিও</span><b>${SPO_NAME}</b></div>
-        <div><span>রুট</span><b>${selectedRoute}</b></div>
-        <div><span>রিটেইলার</span><b>${selectedRetailer.trader || selectedRetailer.name}${selectedRetailer.trader && selectedRetailer.name ? ' ('+selectedRetailer.name+')' : ''}</b></div>
-      </div>
-      <div style="padding:16px;">
-        <div class="review-line" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;"><span style="color:var(--ink-soft);">আগের বাকি</span><span style="font-weight:600;">৳${due.toLocaleString('en-BD')}</span></div>
-        <div class="review-line" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;"><span style="color:var(--ink-soft);">জমার টাকা</span><span style="font-weight:600;color:var(--ok);">৳${amount.toLocaleString('en-BD')}</span></div>
-        <div class="review-line" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;border-top:1px dashed var(--line);margin-top:4px;"><span style="color:var(--ink-soft);">অ্যাপ্রুভ হলে বাকি থাকবে</span><span style="font-weight:700;">৳${remaining.toLocaleString('en-BD')}</span></div>
-        ${collectionDraft.note ? `<div style="margin-top:8px;font-size:13px;color:var(--ink-soft);">নোট: ${collectionDraft.note}</div>` : ''}
-      </div>
-      <div class="invoice-total-row" style="background:var(--gold-soft);border-top:2px solid var(--gold);">
-        <span>এই রিকোয়েস্টটা অ্যাডমিনের কাছে যাবে</span>
-        <span class="amt" style="color:var(--gold);">অ্যাপ্রুভাল বাকি</span>
-      </div>
-    </div>`;
-}
-
-async function submitCollection(){
-  const authUser = firebase.auth().currentUser;
-  if(!authUser){
-    showToast('Firebase লগইন নেই — আবার লগইন করুন', 'error');
-    showLogin();
-    return;
-  }
-  if(!navigator.onLine){
-    showToast('ইন্টারনেট সংযোগ নেই — সংযোগ ফিরলে আবার চেষ্টা করুন', 'error');
-    return;
-  }
-  const amount = Number(collectionDraft.amount || 0);
-  const due = Number(selectedRetailer.currentDue || 0);
-  if(amount <= 0){
-    showToast('সঠিক টাকার পরিমাণ দিন', 'error');
-    return;
-  }
-  if(amount > due){
-    showToast('বর্তমান বাকির চেয়ে বেশি দেওয়া যাবে না', 'error');
-    step = 3;
-    renderStep();
-    return;
-  }
-  nextBtn.disabled = true;
-  nextBtn.textContent = 'পাঠানো হচ্ছে…';
-  startSubmitLoading('কালেকশনটি অ্যাডমিনের কাছে পাঠানো হচ্ছে…');
-  try{
-    const ref = db.collection('online_collections').doc();
-    const reqData = {
-      id: ref.id,
-      date: getCurrentBanglaDate(),
-      route: selectedRoute,
-      retailerTrader: selectedRetailer.trader || '',
-      retailerId: selectedRetailer.id || '',
-      retailerName: selectedRetailer.name || '',
-      amount: amount,
-      note: collectionDraft.note || '',
-      status: 'pending',
-      createdAt: Date.now(),
-      srName: SPO_NAME,
-      createdByUid: authUser.uid
-    };
-    await ref.set(reqData);
-    stopSubmitLoading();
-    selectedRetailer = null;
-    collectionDraft = { amount:'', note:'' };
-    showSuccessPopup('কালেকশন সাবমিট হয়েছে', 'অ্যাডমিনের কাছে নোটিফিকেশন চলে গেছে', ()=>{
-      step = 0;
-      renderStep();
-    });
-  }catch(err){
-    console.error(err);
-    stopSubmitLoading();
-    showToast('সাবমিট করা যায়নি — ' + (err.message||''), 'error');
-    nextBtn.disabled = false;
-    nextBtn.textContent = 'কালেকশন সাবমিট করুন';
-  }
-}
-
-function boot(){
-ensureSpoName();
-updateOnlineStatus();
-renderStep();
-}
-
-// ---------------- লগইন গেট ----------------
-// Firebase Authentication-ই আসল লগইন। LocalStorage শুধু UI state মনে রাখে;
-// Firestore write-এর জন্য সবসময় firebase.auth().currentUser ব্যবহার করা হবে।
-const LOGIN_USER = '';
-const LOGIN_PASS = '';
-
-function isLoggedIn(){
-  try{ return !!firebase.auth().currentUser; }catch(e){ return false; }
-}
-function setLoggedIn(v){
-  try{ localStorage.setItem('spo_logged_in', v ? 'true' : 'false'); }catch(e){}
-}
-
-function showApp(){
-  document.getElementById('loginOverlay').style.display = 'none';
-  document.getElementById('appRoot').style.display = 'block';
 }
 
 function showLogin(){
@@ -1724,8 +1594,27 @@ async function attemptLogin(){
     showApp();
   }catch(err){
     console.error('Firebase login failed:', err);
-    document.getElementById('loginError').textContent = 'লগইন করা যায়নি — ইমেইল/পাসওয়ার্ড বা Firebase Auth সেটিংস পরীক্ষা করুন';
-    document.getElementById('loginError').style.display = 'block';
+
+    const code = (err && err.code) ? String(err.code) : 'unknown-error';
+    const messageMap = {
+      'auth/invalid-credential': 'ইমেইল বা পাসওয়ার্ড সঠিক নয়। Firebase Users থেকে ঠিক Email/Password ব্যবহার করুন।',
+      'auth/invalid-login-credentials': 'ইমেইল বা পাসওয়ার্ড সঠিক নয়। Firebase Users থেকে ঠিক Email/Password ব্যবহার করুন।',
+      'auth/user-not-found': 'এই ইমেইলে কোনো Firebase user পাওয়া যায়নি। Authentication → Users-এ Emailটি আছে কি না দেখুন।',
+      'auth/wrong-password': 'পাসওয়ার্ড ভুল। Firebase Authentication → Users থেকে সঠিক password দিয়ে চেষ্টা করুন।',
+      'auth/operation-not-allowed': 'Firebase-এ Email/Password sign-in চালু নেই। Authentication → Sign-in method থেকে Email/Password Enable করুন।',
+      'auth/too-many-requests': 'অনেকবার ভুল login চেষ্টা হয়েছে। কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।',
+      'auth/network-request-failed': 'ইন্টারনেট/Firebase network connection সমস্যা হয়েছে। ইন্টারনেট পরীক্ষা করে আবার চেষ্টা করুন।',
+      'auth/user-disabled': 'এই Firebase user accountটি disabled করা আছে। Authentication → Users থেকে account status পরীক্ষা করুন।',
+      'auth/invalid-api-key': 'Firebase API key/configuration সমস্যা আছে। HTML-এর Firebase config পরীক্ষা করতে হবে।',
+      'auth/app-not-authorized': 'এই domain/app Firebase Authentication-এর জন্য অনুমোদিত নয়। Firebase Authentication settings পরীক্ষা করুন.'
+    };
+
+    const diagnosis = messageMap[code] || (err && err.message ? String(err.message) : 'অজানা Firebase login error হয়েছে।');
+    const errorBox = document.getElementById('loginError');
+    errorBox.innerHTML = '<strong>লগইন করা যায়নি</strong><br>' + diagnosis +
+      '<div style="margin-top:7px;font-size:12px;opacity:.9;word-break:break-word;">Firebase error code: <b>' +
+      code.replace(/[<>&\"']/g, '') + '</b></div>';
+    errorBox.style.display = 'block';
   }finally{
     btn.disabled = false;
     btn.textContent = 'লগইন করুন';
