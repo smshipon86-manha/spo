@@ -1065,6 +1065,43 @@ function computeStockValue(){
   return totalMRP * 0.85;
 }
 
+// ================= Admin Dashboard-এর একই retailer due calculation =================
+// SPO Dashboard-এও Admin-এর মতো source transaction থেকে বাকি হিসাব করা হবে।
+// currentDue-কে সরাসরি যোগ করা হবে না। এতে দুই Dashboard একই Firebase data থেকে
+// একই ফল দেখাবে।
+function getExplicitOpeningDue(ret){
+  return Number((ret && ret.openingDue && ret.openingDue.amount) || 0) || 0;
+}
+
+function getInvoicesForRetailer(ret){
+  if(!ret) return [];
+  return (invoices || []).filter(inv=>{
+    if(inv.retailerId) return inv.retailerId === ret.id;
+    return inv.retailer === ret.trader;
+  });
+}
+
+function getRetailerCollectionsV2(ret){
+  if(!ret) return [];
+  return (retailerCollectionsLive || []).filter(c=>{
+    if(ret.id && c.retailerId) return c.retailerId === ret.id;
+    return c.route === ret.route && c.retailerTrader === ret.trader;
+  });
+}
+
+function recalculateRetailerDue(ret){
+  if(!ret) return 0;
+  const opening = getExplicitOpeningDue(ret);
+  const credit = getInvoicesForRetailer(ret)
+    .filter(inv=>inv.invoiceType === 'Credit')
+    .reduce((sum, inv)=>sum + (Number(inv.totalAmount || 0) || 0), 0);
+  const oldCollections = (ret.collections || [])
+    .reduce((sum, c)=>sum + (Number(c.amount || 0) || 0), 0);
+  const newCollections = getRetailerCollectionsV2(ret)
+    .reduce((sum, c)=>sum + (Number(c.amount || 0) || 0), 0);
+  return Math.round(opening + credit - oldCollections - newCollections);
+}
+
 function computeDashboardStats(){
   // Admin Dashboard-এর ৪টি কার্ডের একই ক্রম, একই উৎস ও একই হিসাব রাখা হয়েছে।
   const today = getLocalISODate();
@@ -1092,7 +1129,9 @@ function computeDashboardStats(){
     }
   });
 
-  const totalDue = retailers.reduce((s,r)=>s + Math.max(0, Number(r.currentDue||0)||0), 0);
+  // Admin Dashboard-এর মতো: প্রতিটি retailer-এর ledger/source transaction থেকে
+  // বাকি পুনরায় হিসাব করা হবে এবং negative/advance balance মোট বাকি হিসেবে ধরা হবে না।
+  const totalDue = retailers.reduce((s,r)=>s + Math.max(0, Number(recalculateRetailerDue(r)||0)), 0);
   const stockValueMRP = stocks.reduce((sum, st)=>{
     const prod = products.find(p=>p.name===st.productName);
     const cartonEquivalent = Math.max(0, Number(st.qty||0) || 0);
