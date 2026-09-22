@@ -1152,6 +1152,7 @@ function money(v){ return Math.round(v||0).toLocaleString('bn-BD') + ' ৳'; }
 
 function renderDashboard(){
   bottomBar.style.display = 'none';
+  if(!dashboardDate) dashboardDate = getLocalISODate();
   mainArea.innerHTML = `
     <div class="panel" style="margin-bottom:12px;">
       <div class="field-label">আজকের ব্যবসার গুরুত্বপূর্ণ তথ্য</div>
@@ -1161,6 +1162,11 @@ function renderDashboard(){
     <button class="big-order-btn" id="startOrderBtn">📦 অর্ডার জমা দিন <span class="arrow">→</span></button>
     <button class="collect-btn" id="startCollectBtn">💰 কালেকশন জমা দিন <span class="arrow">→</span></button>
     <div class="panel" style="margin-top:14px;">
+      <div class="field-label">📅 কার্যক্রমের তারিখ নির্বাচন করুন</div>
+      <div style="display:flex;gap:8px;align-items:center;margin:8px 0 12px;">
+        <input id="activityDatePicker" type="date" value="${dashboardDate}" style="flex:1;min-width:0;padding:11px 12px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:15px;background:#fff;color:#222;">
+        <button type="button" id="activityTodayBtn" style="padding:10px 12px;border:0;border-radius:8px;background:var(--navy);color:#fff;font-family:inherit;font-weight:700;white-space:nowrap;">আজ</button>
+      </div>
       <div class="field-label" id="activityLabel"></div>
       <div id="activityList"></div>
     </div>
@@ -1173,6 +1179,21 @@ function renderDashboard(){
     flowMode = 'collection'; collectionDraft = { amount: '', note: '' }; step = 1; renderStep();
   };
   renderDashboardStats();
+  const datePicker = document.getElementById('activityDatePicker');
+  const todayBtn = document.getElementById('activityTodayBtn');
+  if(datePicker){
+    datePicker.addEventListener('change', ()=>{
+      dashboardDate = datePicker.value || getLocalISODate();
+      renderActivityList();
+    });
+  }
+  if(todayBtn){
+    todayBtn.addEventListener('click', ()=>{
+      dashboardDate = getLocalISODate();
+      if(datePicker) datePicker.value = dashboardDate;
+      renderActivityList();
+    });
+  }
   renderActivityList();
 }
 
@@ -1202,7 +1223,17 @@ function renderDashboardStats(){
       </div>
     </div>`;
   const lbl = document.getElementById('activityLabel');
-  if(lbl) lbl.textContent = 'সাম্প্রতিক কার্যক্রম (আপনার পাঠানো)';
+  if(lbl){
+    const selected = parseBanglaOrISODate(dashboardDate || getLocalISODate());
+    lbl.textContent = selected
+      ? `${toBnDigits(selected.getDate())}-${toBnDigits(selected.getMonth()+1)}-${toBnDigits(selected.getFullYear())} তারিখের কার্যক্রম (আপনার পাঠানো)`
+      : 'নির্বাচিত তারিখের কার্যক্রম (আপনার পাঠানো)';
+  }
+}
+
+function toBnDigits(value){
+  const bn = ['০','১','২','৩','৪','৫','৬','৭','৮','৯'];
+  return String(value).replace(/[0-9]/g, d=>bn[Number(d)]);
 }
 
 function getMyActivity(){
@@ -1224,10 +1255,24 @@ function getMyActivity(){
   return filtered.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).slice(0, 50);
 }
 
-function statusMeta(status){
-  if(status==='invoiced' || status==='approved') return {cls:'ok', label:'✅ সফল হয়েছে'};
+function statusMeta(status, type){
+  if(status==='invoiced' || status==='approved' || status==='done') {
+    return {cls:'ok', label: type==='collection' ? '✅ কালেকশন অ্যাপ্রুভ হয়েছে' : '✅ অর্ডার অ্যাপ্রুভ হয়েছে'};
+  }
   if(status==='rejected') return {cls:'rejected', label:'❌ বাতিল হয়েছে'};
   return {cls:'pending', label:'⏳ পেন্ডিং'};
+}
+
+function getOrderGrandTotal(order){
+  // SPO কার্যক্রমে 'মোট দাম' = MRP থেকে ১৬% বাদ দেওয়ার পরের সম্ভাব্য দাম।
+  const mrpTotal = (order.items||[]).reduce((sum,it)=>{
+    const prod = products.find(p=>p.name===it.productName);
+    if(!prod) return sum;
+    const cartonPrice = Number(prod.price||0)||0;
+    const piecePrice = Number(prod.piecePrice||0)||getPiecePrice(prod);
+    return sum + (Number(it.cartonQty||0)*cartonPrice) + (Number(it.pieceQty||0)*piecePrice);
+  },0);
+  return Math.round(mrpTotal * 0.84);
 }
 
 function toggleActivity(id){
@@ -1278,9 +1323,10 @@ function renderActivityList(){
     return;
   }
   listEl.innerHTML = items.map(item=>{
-    const st = statusMeta(item.status);
+    const st = statusMeta(item.status, item.type);
+    const orderTotal = item.type==='order' ? getOrderGrandTotal(item) : 0;
     const detail = item.type==='order'
-      ? item.items.map(it=>`${it.productName} — ${it.cartonQty? it.cartonQty+' কার্টুন' : ''}${it.cartonQty && it.pieceQty ? ' + ' : ''}${it.pieceQty? it.pieceQty+' পিস' : ''}`).join('<br/>')
+      ? `${item.items.map(it=>`${it.productName} — ${it.cartonQty? it.cartonQty+' কার্টুন' : ''}${it.cartonQty && it.pieceQty ? ' + ' : ''}${it.pieceQty? it.pieceQty+' পিস' : ''}`).join('<br/>')}<div style="margin-top:8px;font-weight:800;color:var(--navy);">মোট দাম MRP = ৳${(Math.round(orderTotal/0.84)).toLocaleString('en-BD')}<br/><span style="display:inline-block;margin-top:3px;">ডিসকাউন্ট দাম = ৳${orderTotal.toLocaleString('en-BD')} (১৬% বাদে)</span></div>`
       : `জমার টাকা: ৳${Number(item.amount||0).toLocaleString('en-BD')}${item.note ? '<br/>নোট: '+item.note : ''}`;
     const canEdit = item.type==='order' && st.cls==='pending';
     return `
@@ -1528,14 +1574,83 @@ function renderReviewStep(){
         </table>
       </div>
       <div class="invoice-total-row">
-        <span>সর্বমোট (এমআরপি)</span>
+        <span>মোট দাম MRP</span>
         <span class="amt">৳${grandTotal.toLocaleString('en-BD')}</span>
       </div>
       <div class="invoice-total-row" style="background:var(--paper-2);border-top:1px dashed var(--line);">
-        <span style="font-size:12.5px;color:var(--ink-soft);">সম্ভাব্য দাম (এমআরপি থেকে ১৬% বাদে)</span>
-        <span class="amt" style="font-size:16px;color:var(--ink-soft);">৳${Math.round(grandTotal*0.84).toLocaleString('en-BD')}</span>
+        <span style="font-size:12.5px;color:var(--ink-soft);">ডিসকাউন্ট দাম (১৬% বাদে)</span>
+        <span class="amt" style="font-size:16px;color:var(--ok);">৳${Math.round(grandTotal*0.84).toLocaleString('en-BD')}</span>
       </div>` : `<div class="empty-state">কোনো পণ্য যুক্ত করা হয়নি</div>`}
     </div>`;
+}
+
+function renderCollectionAmountStep(){
+  bottomBar.style.display='flex';
+  nextBtn.className='btn btn-primary';
+  backBtn.onclick=()=>{step=2;renderStep();};
+  nextBtn.textContent='রিভিউ';
+  const currentDue = selectedRetailer ? recalculateRetailerDue(selectedRetailer) : 0;
+  mainArea.innerHTML=`
+    <div class="panel">
+      <div class="field-label">কালেকশনের টাকা লিখুন</div>
+      <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;">
+        <div style="font-weight:800;">${selectedRetailer?.trader || selectedRetailer?.name || ''}</div>
+        <div style="font-size:13px;color:var(--ink-soft);margin-top:4px;">বর্তমান বাকি: ৳${Math.max(0,Number(currentDue||0)).toLocaleString('en-BD')}</div>
+      </div>
+      <label class="field-label" for="collectionAmountInput">জমার টাকা</label>
+      <input id="collectionAmountInput" class="search-box" type="number" min="1" inputmode="numeric" placeholder="টাকার পরিমাণ" value="${collectionDraft.amount||''}" />
+      <label class="field-label" for="collectionNoteInput" style="margin-top:12px;">নোট (ঐচ্ছিক)</label>
+      <textarea id="collectionNoteInput" class="search-box" rows="3" placeholder="প্রয়োজনে নোট লিখুন">${collectionDraft.note||''}</textarea>
+    </div>`;
+  const amountEl=document.getElementById('collectionAmountInput');
+  const noteEl=document.getElementById('collectionNoteInput');
+  const sync=()=>{collectionDraft.amount=amountEl.value;collectionDraft.note=noteEl.value;nextBtn.disabled=!(Number(amountEl.value)>0);};
+  amountEl.oninput=sync; noteEl.oninput=sync; sync();
+  nextBtn.onclick=()=>{if(!(Number(collectionDraft.amount)>0)){showToast('জমার টাকার পরিমাণ দিন','error');return;}step=4;renderStep();};
+}
+
+function renderCollectionReviewStep(){
+  bottomBar.style.display='flex';
+  backBtn.onclick=()=>{step=3;renderStep();};
+  nextBtn.className='btn btn-primary ok';
+  nextBtn.textContent='কালেকশন সাবমিট করুন';
+  nextBtn.disabled=false;
+  nextBtn.onclick=submitCollection;
+  mainArea.innerHTML=`
+    <div class="invoice-card">
+      <div class="invoice-head"><div class="invoice-shop">মেসার্স ধুনট সিড এন্ড এগ্রো ট্রেডার্স</div><div class="invoice-sub">কালেকশন রিভিউ</div></div>
+      <div class="invoice-meta">
+        <div><span>তারিখ</span><b>${getCurrentBanglaDate()}</b></div>
+        <div><span>এসপিও</span><b>${SPO_NAME}</b></div>
+        <div><span>রুট</span><b>${selectedRoute||''}</b></div>
+        <div><span>রিটেইলার</span><b>${selectedRetailer?.trader||selectedRetailer?.name||''}</b></div>
+      </div>
+      <div class="invoice-total-row"><span>জমার টাকা</span><span class="amt">৳${Number(collectionDraft.amount||0).toLocaleString('en-BD')}</span></div>
+      ${collectionDraft.note ? `<div style="padding:12px;border-top:1px dashed var(--line);font-size:13px;">নোট: ${String(collectionDraft.note).replace(/</g,'&lt;')}</div>` : ''}
+    </div>`;
+}
+
+async function submitCollection(){
+  if(orderSubmitInProgress) return;
+  orderSubmitInProgress=true;
+  const authUser=firebase.auth().currentUser;
+  if(!authUser){orderSubmitInProgress=false;showToast('Firebase লগইন নেই — আবার লগইন করুন','error');showLogin();return;}
+  if(authUser.uid!==SPO_ALLOWED_UID){orderSubmitInProgress=false;showToast('এই Firebase account এই SPO অ্যাপের জন্য অনুমোদিত নয়','error');await firebase.auth().signOut();return;}
+  const amount=Math.round(Number(collectionDraft.amount)||0);
+  if(amount<=0){orderSubmitInProgress=false;showToast('জমার টাকার পরিমাণ সঠিক নয়','error');return;}
+  nextBtn.disabled=true; nextBtn.textContent='পাঠানো হচ্ছে…';
+  try{
+    const ref=db.collection('online_collections').doc();
+    const data={id:ref.id,date:getCurrentBanglaDate(),route:selectedRoute||'',retailerTrader:selectedRetailer?.trader||'',retailerId:selectedRetailer?.id||'',retailerName:selectedRetailer?.name||'',amount,note:collectionDraft.note||'',status:'pending',createdAt:Date.now(),srName:SPO_NAME,createdByUid:authUser.uid};
+    await ref.set(data);
+    orderSubmitInProgress=false; nextBtn.disabled=false; nextBtn.textContent='কালেকশন সাবমিট করুন';
+    collectionDraft={amount:'',note:''}; selectedRetailer=null; showSuccessPopup('কালেকশন সাবমিট হয়েছে','অ্যাডমিনের অনুমোদনের জন্য পেন্ডিং আছে',()=>{step=0;renderStep();});
+  }catch(err){
+    orderSubmitInProgress=false; nextBtn.disabled=false; nextBtn.textContent='কালেকশন সাবমিট করুন';
+    let msg=err&&err.message?String(err.message):'অজানা Firebase error';
+    if(err&&(/permission-denied|missing or insufficient permissions|permission/i.test(String(err.code||''))||/permission-denied|missing or insufficient permissions|permission/i.test(msg))) msg='Firestore Security Rules এই SPO account-কে online_collections-এ লেখার অনুমতি দিচ্ছে না।';
+    showToast(msg,'error'); console.error('COLLECTION SUBMIT ERROR:',err);
+  }
 }
 
 async function submitOrder(){
