@@ -738,6 +738,12 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+// ---- রিড কমানো (১): অফলাইন ক্যাশ ----
+// ফোনে আগে ডাউনলোড হওয়া ডাটা রাখা হবে; ক্যাশ চালু না হলেও অ্যাপ আগের মতোই চলবে।
+// এটি অবশ্যই অন্য যেকোনো Firestore কলের আগে থাকতে হবে।
+try{
+  db.enablePersistence({synchronizeTabs:true}).catch(function(err){ console.warn('অফলাইন ক্যাশ চালু হয়নি:', err && err.code); });
+}catch(e){ console.warn('অফলাইন ক্যাশ চালু হয়নি:', e); }
 const SPO_ALLOWED_UID = 'h7Py90GJZEbsHSFNKgZMpaTYIaG2';
 
 // ---------------- SPO নাম (একবার লিখলে ফোনেই সেভ থাকবে) ----------------
@@ -1015,6 +1021,30 @@ let firebaseAuthReady = false;
 
 let stopDataListeners = [];
 function stopListening(){ stopDataListeners.forEach(fn=>{try{fn();}catch(e){}}); stopDataListeners=[]; }
+
+// ---- রিড কমানো (২): অ্যাপ ২ মিনিটের বেশি ব্যাকগ্রাউন্ডে থাকলে লাইভ লিসেনার বন্ধ, ফিরলে আবার চালু ----
+// শুধু ড্যাশবোর্ডে (step 0) থাকলে বন্ধ হবে, যাতে অর্ডার/কালেকশনের মাঝপথের কাজে কোনো প্রভাব না পড়ে।
+let listenersPausedByHide = false;
+let hideStopTimer = null;
+const HIDE_STOP_DELAY_MS = 120000;
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden){
+    if(hideStopTimer) clearTimeout(hideStopTimer);
+    hideStopTimer = setTimeout(function(){
+      hideStopTimer = null;
+      if(!document.hidden || !stopDataListeners.length || step!==0) return;
+      stopListening();
+      listenersPausedByHide = true;
+    }, HIDE_STOP_DELAY_MS);
+  }else{
+    if(hideStopTimer){ clearTimeout(hideStopTimer); hideStopTimer = null; }
+    if(listenersPausedByHide){
+      listenersPausedByHide = false;
+      const u = firebase.auth().currentUser;
+      if(u && u.uid===SPO_ALLOWED_UID && !stopDataListeners.length) startListening();
+    }
+  }
+});
 
 firebase.auth().onAuthStateChanged((user)=>{
   firebaseAuthReady=true;
