@@ -806,6 +806,7 @@ let routes = [];
 let retailers = [];    // {route, name, trader, address, mobile, currentDue, collections:[{date,amount}], id}
 let products  = [];    // {name, price, piecePrice, piecesPerCarton, code}
 let stocks    = [];    // {productName, qty}  -- কার্টুন এককে
+let appSettings = { stockValueDeductionPercent: 15 }; // অ্যাডমিনের সেটিংস থেকে আসে (appData.appSettings)
 let invoices  = [];    // sales_invoices কালেকশন থেকে (ড্যাশবোর্ডের জন্য)
 let allOrders = [];     // online_orders (সব — pending + resolved), ইতিহাস দেখানোর জন্য
 let allCollections = []; // online_collections (সব — pending + resolved)
@@ -1056,7 +1057,7 @@ firebase.auth().onAuthStateChanged((user)=>{
 
 function startListening(){
   stopListening(); const authUser=firebase.auth().currentUser; if(!authUser) return;
-  const unsubApp=db.collection('sales_system').doc('appData').onSnapshot((doc)=>{ if(navigator.onLine) setConn(true,'সংযুক্ত'); if(doc.exists){const data=doc.data(); routes=Array.isArray(data.routes)?data.routes:[]; retailers=Array.isArray(data.retailers)?data.retailers:[]; products=Array.isArray(data.products)?data.products:[]; stocks=Array.isArray(data.stocks)?data.stocks:[];} renderStep(); },(err)=>{console.error('appData read error:',err);setConn(false,'ডেটা পড়ার সমস্যা');});
+  const unsubApp=db.collection('sales_system').doc('appData').onSnapshot((doc)=>{ if(navigator.onLine) setConn(true,'সংযুক্ত'); if(doc.exists){const data=doc.data(); routes=Array.isArray(data.routes)?data.routes:[]; retailers=Array.isArray(data.retailers)?data.retailers:[]; products=Array.isArray(data.products)?data.products:[]; stocks=Array.isArray(data.stocks)?data.stocks:[]; appSettings=(data.appSettings&&typeof data.appSettings==='object')?{stockValueDeductionPercent:15,...data.appSettings}:{stockValueDeductionPercent:15};} renderStep(); },(err)=>{console.error('appData read error:',err);setConn(false,'ডেটা পড়ার সমস্যা');});
   const unsubInvoices=db.collection('sales_invoices').onSnapshot((snap)=>{invoices=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('invoice read error:',err));
   const unsubOrders=db.collection('online_orders').where('createdByUid','==',authUser.uid).onSnapshot((snap)=>{allOrders=snap.docs.map(d=>d.data());pendingOrders=allOrders.filter(o=>!o.status||o.status==='pending');if(step===0||step===3)renderStep();},(err)=>console.error('online_orders read error:',err));
   const unsubCollections=db.collection('online_collections').where('createdByUid','==',authUser.uid).onSnapshot((snap)=>{allCollections=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('online_collections read error:',err));
@@ -1085,14 +1086,25 @@ function formatBanglaDate(dateObjOrISO){
   return `${toBn(d.getDate())}-${months[d.getMonth()]}-${toBn(d.getFullYear())}`;
 }
 
-// অ্যাডমিন ফাইলের মতোই মোট স্টকের মূল্য (MRP থেকে ১৫% বাদ দিয়ে)
+// অ্যাডমিন ফাইলের মতোই মোট স্টকের মূল্য — MRP থেকে অ্যাডমিন সেটিংসের শতাংশ (ডিফল্ট ১৫%) বাদ দিয়ে
+function spoNormalizeProductKey(name){ return String(name || '').trim().replace(/\s+/g, ' ').toUpperCase(); }
+function spoFindProductByName(name){
+  const key = spoNormalizeProductKey(name);
+  return (products || []).find(p=>spoNormalizeProductKey(p.name) === key);
+}
+function spoStockValueFactor(){
+  const raw = Number(appSettings && appSettings.stockValueDeductionPercent);
+  const pct = Number.isFinite(raw) ? raw : 15;
+  return 1 - pct / 100;
+}
 function computeStockValue(){
-  const totalMRP = stocks.reduce((sum, st)=>{
-    const prod = products.find(p=>p.name===st.productName);
-    const cartonPrice = Number(prod?.price || 0) || 0;
-    return sum + (Number(st.qty||0)||0) * cartonPrice;
+  const totalMRP = (stocks || []).reduce((sum, st)=>{
+    const prod = spoFindProductByName(st.productName);
+    const cartonEquivalent = Math.max(0, Number(st.qty||0) || 0);
+    const cartonPrice = Number(prod?.price || prod?.cartonPrice || 0) || 0;
+    return sum + cartonEquivalent * cartonPrice;
   }, 0);
-  return totalMRP * 0.85;
+  return totalMRP * spoStockValueFactor();
 }
 
 // ================= Admin Dashboard-এর একই retailer due calculation =================
@@ -1162,13 +1174,7 @@ function computeDashboardStats(){
   // Admin Dashboard-এর মতো: প্রতিটি retailer-এর ledger/source transaction থেকে
   // বাকি পুনরায় হিসাব করা হবে এবং negative/advance balance মোট বাকি হিসেবে ধরা হবে না।
   const totalDue = retailers.reduce((s,r)=>s + Math.max(0, Number(recalculateRetailerDue(r)||0)), 0);
-  const stockValueMRP = stocks.reduce((sum, st)=>{
-    const prod = products.find(p=>p.name===st.productName);
-    const cartonEquivalent = Math.max(0, Number(st.qty||0) || 0);
-    const cartonPrice = Number(prod?.price || prod?.cartonPrice || 0) || 0;
-    return sum + cartonEquivalent * cartonPrice;
-  }, 0);
-  const stockValue = stockValueMRP * 0.85;
+  const stockValue = computeStockValue();
 
   return {
     daySales, dayInvoiceCount: dayInvoices.length,
