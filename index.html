@@ -824,6 +824,8 @@ let collectionDraft = { amount: '', note: '' };
 let editingOrderId = null; // pending থাকা কোনো অর্ডার এডিট করা হলে তার Firestore আইডি এখানে থাকে
 let dashboardDate = null; // retained for compatibility; dashboard cards always mirror Admin's current-day cards
 let retailerCollectionsLive = [];
+let spoTodayData = null;   // এডমিনের লেখা 'sales_system/spoToday' (আজকের বিক্রি/কালেকশন + রিটেইলারের বাকি)
+let spoTodayLoaded = false;
 let orderSubmitInProgress = false;
 
 const mainArea = document.getElementById('mainArea');
@@ -1058,13 +1060,12 @@ firebase.auth().onAuthStateChanged((user)=>{
 function startListening(){
   stopListening(); const authUser=firebase.auth().currentUser; if(!authUser) return;
   const unsubApp=db.collection('sales_system').doc('appData').onSnapshot((doc)=>{ if(navigator.onLine) setConn(true,'সংযুক্ত'); if(doc.exists){const data=doc.data(); routes=Array.isArray(data.routes)?data.routes:[]; retailers=Array.isArray(data.retailers)?data.retailers:[]; products=Array.isArray(data.products)?data.products:[]; stocks=Array.isArray(data.stocks)?data.stocks:[]; appSettings=(data.appSettings&&typeof data.appSettings==='object')?{stockValueDeductionPercent:15,...data.appSettings}:{stockValueDeductionPercent:15};} renderStep(); },(err)=>{console.error('appData read error:',err);setConn(false,'ডেটা পড়ার সমস্যা');});
-  const unsubInvoices=db.collection('sales_invoices').onSnapshot((snap)=>{invoices=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('invoice read error:',err));
   const unsubOrders=db.collection('online_orders').where('createdByUid','==',authUser.uid).onSnapshot((snap)=>{allOrders=snap.docs.map(d=>d.data());pendingOrders=allOrders.filter(o=>!o.status||o.status==='pending');if(step===0||step===3)renderStep();},(err)=>console.error('online_orders read error:',err));
   const unsubCollections=db.collection('online_collections').where('createdByUid','==',authUser.uid).onSnapshot((snap)=>{allCollections=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('online_collections read error:',err));
-  // Admin Dashboard-এর কালেকশন কার্ডে ব্যবহৃত নতুন retailer_collections-ও লাইভ নেওয়া হচ্ছে,
-  // যাতে SPO-র Dashboard-এ একই উৎসের হিসাব দেখা যায়।
-  const unsubRetailerCollections=db.collection('retailer_collections').onSnapshot((snap)=>{retailerCollectionsLive=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('retailer_collections read error:',err));
-  stopDataListeners=[unsubApp,unsubInvoices,unsubOrders,unsubCollections,unsubRetailerCollections];
+  // রিড কমানোর জন্য sales_invoices ও retailer_collections আর পড়া হয় না;
+  // এডমিন আজকের সংখ্যা ও রিটেইলারের বাকি একটা ছোট ডকুমেন্টে লিখে রাখে, শুধু সেটাই পড়া হয়।
+  const unsubSpoToday=db.collection('sales_system').doc('spoToday').onSnapshot((doc)=>{spoTodayData=doc.exists?doc.data():null;spoTodayLoaded=true;if(step===0)renderStep();},(err)=>console.error('spoToday read error:',err));
+  stopDataListeners=[unsubApp,unsubSpoToday,unsubOrders,unsubCollections];
 }
 
 // ---------------- step renderers ----------------
@@ -1145,43 +1146,23 @@ function recalculateRetailerDue(ret){
 }
 
 function computeDashboardStats(){
-  // Admin Dashboard-এর ৪টি কার্ডের একই ক্রম, একই উৎস ও একই হিসাব রাখা হয়েছে।
-  const today = getLocalISODate();
-  const dayInvoices = invoices.filter(inv=>{
-    const parsed = parseBanglaOrISODate(inv.date || '');
-    return parsed && toLocalISODate(parsed) === today;
-  });
-  const daySales = dayInvoices.reduce((s,inv)=>s+(Number(inv.totalAmount||0)||0), 0);
-
-  let dayCollectionTotal = 0, dayCollectionCount = 0;
-  retailers.forEach(ret=>{
-    (ret.collections||[]).forEach(c=>{
-      const d = parseBanglaOrISODate(c.date || '');
-      if(d && toLocalISODate(d) === today){
-        dayCollectionTotal += Number(c.amount||0) || 0;
-        dayCollectionCount++;
-      }
-    });
-  });
-  (retailerCollectionsLive || []).forEach(c=>{
-    const d = parseBanglaOrISODate(c.date || '');
-    if(d && toLocalISODate(d) === today){
-      dayCollectionTotal += Number(c.amount||0) || 0;
-      dayCollectionCount++;
-    }
-  });
-
-  // Admin Dashboard-এর মতো: প্রতিটি retailer-এর ledger/source transaction থেকে
-  // বাকি পুনরায় হিসাব করা হবে এবং negative/advance balance মোট বাকি হিসেবে ধরা হবে না।
-  const totalDue = retailers.reduce((s,r)=>s + Math.max(0, Number(recalculateRetailerDue(r)||0)), 0);
-  const stockValue = computeStockValue();
-
+  // এডমিন অ্যাপ আজকের হিসাব আগে থেকেই 'sales_system/spoToday'-তে লিখে রাখে; এখানে শুধু সেটাই দেখানো হয়।
+  // তারিখ আজকের না হলে (নতুন দিন, এখনো কিছু লেখা হয়নি) ০ দেখাবে।
+  const d = spoTodayData;
+  const fresh = !!(d && d.date === getLocalISODate());
+  const num = v => Number(v || 0) || 0;
   return {
-    daySales, dayInvoiceCount: dayInvoices.length,
-    stockValue,
-    dayCollectionTotal, dayCollectionCount,
-    totalDue
+    daySales: fresh ? num(d.todaySales) : 0,
+    dayInvoiceCount: fresh ? num(d.todayInvoiceCount) : 0,
+    dayCollectionTotal: fresh ? num(d.todayCollection) : 0,
+    dayCollectionCount: fresh ? num(d.todayCollectionCount) : 0
   };
+}
+
+// এডমিনের হিসাব করা রিটেইলারের বর্তমান বাকি (spoToday.dues); তথ্য না এলে null
+function getSpoRetailerDue(ret){
+  if(!ret || !ret.id || !spoTodayData || !spoTodayData.dues) return null;
+  return Math.max(0, Number(spoTodayData.dues[ret.id] || 0) || 0);
 }
 
 function money(v){ return Math.round(v||0).toLocaleString('bn-BD') + ' ৳'; }
@@ -1235,29 +1216,21 @@ function renderDashboard(){
 
 function renderDashboardStats(){
   const s = computeDashboardStats();
+  const upd = spoTodayData && spoTodayData.updatedAt && spoTodayData.updatedAt.toDate ? spoTodayData.updatedAt.toDate() : null;
+  const updNote = upd ? `সর্বশেষ হালনাগাদ: ${upd.toLocaleTimeString('bn-BD',{hour:'2-digit',minute:'2-digit'})}` : (spoTodayLoaded && !spoTodayData ? 'এডমিন অ্যাপ থেকে তথ্য এখনো আসেনি' : '');
   document.getElementById('statsContainer').innerHTML = `
     <div class="stat-grid">
       <div class="stat-card">
         <div class="label">আজকের মোট বিক্রি</div>
         <div class="value" style="color:var(--navy-2);">${money(s.daySales)}</div>
-        <div class="note">${s.dayInvoiceCount.toLocaleString('bn-BD')}টি ইনভয়েস</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">মোট স্টকের মূল্য</div>
-        <div class="value" style="color:var(--gold);">${money(s.stockValue)}</div>
-        <div class="note">বর্তমান কার্টুন মূল্য অনুযায়ী</div>
+        <div class="note">${s.dayInvoiceCount.toLocaleString('bn-BD')}টি ইনভয়েস</div>
       </div>
       <div class="stat-card">
         <div class="label">আজকের মোট কালেকশন</div>
         <div class="value" style="color:var(--ok);">${money(s.dayCollectionTotal)}</div>
         <div class="note">${s.dayCollectionCount.toLocaleString('bn-BD')}টি এন্ট্রি</div>
       </div>
-      <div class="stat-card">
-        <div class="label">মোট কাস্টমার বাকি</div>
-        <div class="value" style="color:var(--stamp);">${money(s.totalDue)}</div>
-        <div class="note">বর্তমান হিসাব অনুযায়ী</div>
-      </div>
-    </div>`;
+    </div>${updNote ? `<div style="font-size:11px;color:var(--ink-soft);text-align:right;margin:-6px 2px 10px;">${updNote}</div>` : ''}`;
   const lbl = document.getElementById('activityLabel');
   if(lbl){
     const selected = parseBanglaOrISODate(dashboardDate || getLocalISODate());
@@ -1625,13 +1598,13 @@ function renderCollectionAmountStep(){
   nextBtn.className='btn btn-primary';
   backBtn.onclick=()=>{step=2;renderStep();};
   nextBtn.textContent='রিভিউ';
-  const currentDue = selectedRetailer ? recalculateRetailerDue(selectedRetailer) : 0;
+  const currentDue = getSpoRetailerDue(selectedRetailer);
   mainArea.innerHTML=`
     <div class="panel">
       <div class="field-label">কালেকশনের টাকা লিখুন</div>
       <div style="background:var(--paper-2);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px;">
         <div style="font-weight:800;">${selectedRetailer?.trader || selectedRetailer?.name || ''}</div>
-        <div style="font-size:13px;color:var(--ink-soft);margin-top:4px;">বর্তমান বাকি: ৳${Math.max(0,Number(currentDue||0)).toLocaleString('en-BD')}</div>
+        <div style="font-size:13px;color:var(--ink-soft);margin-top:4px;">বর্তমান বাকি: ${currentDue===null?'—':'৳'+currentDue.toLocaleString('en-BD')}</div>
       </div>
       <label class="field-label" for="collectionAmountInput">জমার টাকা</label>
       <input id="collectionAmountInput" class="search-box" type="number" min="1" inputmode="numeric" placeholder="টাকার পরিমাণ" value="${collectionDraft.amount||''}" />
@@ -1672,16 +1645,23 @@ async function submitCollection(){
   const authUser=firebase.auth().currentUser;
   if(!authUser){orderSubmitInProgress=false;showToast('Firebase লগইন নেই — আবার লগইন করুন','error');showLogin();return;}
   if(authUser.uid!==SPO_ALLOWED_UID){orderSubmitInProgress=false;showToast('এই Firebase account এই SPO অ্যাপের জন্য অনুমোদিত নয়','error');await firebase.auth().signOut();return;}
+  if(!navigator.onLine){orderSubmitInProgress=false;showToast('ইন্টারনেট সংযোগ নেই — নেট এলে আবার চেষ্টা করুন','error');return;}
   const amount=Math.round(Number(collectionDraft.amount)||0);
   if(amount<=0){orderSubmitInProgress=false;showToast('জমার টাকার পরিমাণ সঠিক নয়','error');return;}
   nextBtn.disabled=true; nextBtn.textContent='পাঠানো হচ্ছে…';
+  let slowSendTimer=null;
   try{
     const ref=db.collection('online_collections').doc();
     const data={id:ref.id,date:getCurrentBanglaDate(),route:selectedRoute||'',retailerTrader:selectedRetailer?.trader||'',retailerId:selectedRetailer?.id||'',retailerName:selectedRetailer?.name||'',amount,note:collectionDraft.note||'',status:'pending',createdAt:Date.now(),srName:SPO_NAME,createdByUid:authUser.uid};
+    // নেট চলে গেলে বা ধীর হলে লেখাটি ফোনে অপেক্ষারত থাকে এবং নেট এলে নিজে থেকেই চলে যায় —
+    // তাই দেরি হলে আবার সাবমিট না করার স্পষ্ট বার্তা দেওয়া হয় (ডুপ্লিকেট ঠেকাতে)।
+    slowSendTimer=setTimeout(()=>{showToast('⚠️ পাঠাতে দেরি হচ্ছে। আবার সাবমিট করবেন না — নেট এলে নিজে থেকেই চলে যাবে। পরে কার্যক্রম তালিকায় দেখে নিন।','error');},8000);
     await ref.set(data);
+    clearTimeout(slowSendTimer);
     orderSubmitInProgress=false; nextBtn.disabled=false; nextBtn.textContent='কালেকশন সাবমিট করুন';
     collectionDraft={amount:'',note:''}; selectedRetailer=null; showSuccessPopup('কালেকশন সাবমিট হয়েছে','অ্যাডমিনের অনুমোদনের জন্য পেন্ডিং আছে',()=>{step=0;renderStep();});
   }catch(err){
+    clearTimeout(slowSendTimer);
     orderSubmitInProgress=false; nextBtn.disabled=false; nextBtn.textContent='কালেকশন সাবমিট করুন';
     let msg=err&&err.message?String(err.message):'অজানা Firebase error';
     if(err&&(/permission-denied|missing or insufficient permissions|permission/i.test(String(err.code||''))||/permission-denied|missing or insufficient permissions|permission/i.test(msg))) msg='Firestore Security Rules এই SPO account-কে online_collections-এ লেখার অনুমতি দিচ্ছে না।';
