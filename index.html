@@ -408,6 +408,21 @@
     margin-bottom:12px;
   }
 
+  /* পণ্য বাছাইয়ের ধাপে হেডার + ধাপ-বার + সার্চ বক্স স্ক্রল করলেও স্থির থাকে */
+  :root{--hdr-h:0px;--steps-h:0px;}
+  body.prod-step .steps-bar{position:sticky;top:var(--hdr-h);z-index:9;}
+  .sticky-product-head{
+    position:sticky;
+    top:calc(var(--hdr-h) + var(--steps-h));
+    z-index:8;
+    background:var(--card);
+    margin:-16px -16px 8px;
+    padding:12px 16px 6px;
+    border-bottom:1px solid var(--line);
+    border-radius:var(--radius) var(--radius) 0 0;
+  }
+  .sticky-product-head .search-box{margin-bottom:6px;}
+
   footer.bottom-bar{
     position:fixed;
     bottom:0;
@@ -1057,19 +1072,133 @@ firebase.auth().onAuthStateChanged((user)=>{
   }else{ stopListening(); setLoggedIn(false); showLogin(); }
 });
 
+// ---- রিড কমানো (৩): নিজের অর্ডার/কালেকশন — সব নয়, শুধু পেন্ডিং + সাম্প্রতিক ----
+// পেন্ডিং (স্টক রিজার্ভ ও এডিটের জন্য) এবং সাম্প্রতিক SPO_RECENT_LIMIT টি লাইভ থাকে।
+// পুরনো কোনো তারিখ বেছে নিলে শুধু সেই দিনের ডাটা একবার আনা হয় (বাড়তি ইনডেক্স না থাকলে আগের মতো সব আনা হয়)।
+const SPO_RECENT_LIMIT = 40;
+let ordersPendingMap = new Map(), ordersRecentMap = new Map(), ordersDayMap = new Map();
+let colsPendingMap = new Map(), colsRecentMap = new Map(), colsDayMap = new Map();
+let recentReady = { orders:false, cols:false };
+let recentWindow = { orders:{full:false, oldest:0}, cols:{full:false, oldest:0} };
+const loadedActivityDays = new Set();
+const failedActivityDays = new Map(); // দিন -> ব্যর্থ হওয়ার সময় (৩০ সেকেন্ডের আগে আবার চেষ্টা হবে না)
+let activityDayLoading = false;
+
+function docsToMap(snap){
+  const m = new Map();
+  snap.docs.forEach(d=>{ const o = d.data(); m.set(o.id || d.id, o); });
+  return m;
+}
+// অগ্রাধিকার: সাম্প্রতিক লাইভ > পেন্ডিং লাইভ > দিনভিত্তিক (শুধু চূড়ান্ত স্ট্যাটাসের ডকুমেন্ট)
+function mergeOwnMaps(primary, secondary, tertiary){
+  const out = new Map();
+  [tertiary, secondary, primary].forEach(m=>m.forEach((v,k)=>out.set(k, v)));
+  return Array.from(out.values());
+}
+function rebuildOwnLists(){
+  allOrders = mergeOwnMaps(ordersRecentMap, ordersPendingMap, ordersDayMap);
+  pendingOrders = allOrders.filter(o=>!o.status||o.status==='pending');
+  allCollections = mergeOwnMaps(colsRecentMap, colsPendingMap, colsDayMap);
+}
+function applyOwnOrders(){ rebuildOwnLists(); if(step===0||step===3) renderStep(); }
+function applyOwnCollections(){ rebuildOwnLists(); if(step===0) renderStep(); }
+
+function startOwnDataListeners(uid){
+  const unsubs = [];
+  const q = (name)=>db.collection(name).where('createdByUid','==',uid);
+  // ১) পেন্ডিং — বাড়তি ইনডেক্স লাগে না
+  unsubs.push(q('online_orders').where('status','==','pending').onSnapshot((s)=>{ ordersPendingMap = docsToMap(s); applyOwnOrders(); },(e)=>console.error('online_orders pending read error:',e)));
+  unsubs.push(q('online_collections').where('status','==','pending').onSnapshot((s)=>{ colsPendingMap = docsToMap(s); applyOwnCollections(); },(e)=>console.error('online_collections pending read error:',e)));
+  // ২) সাম্প্রতিক — Firestore-এ (createdByUid, createdAt) কম্পোজিট ইনডেক্স লাগে; না থাকলে আগের পদ্ধতিতে ফিরে যায়
+  const startRecent = (name, kind)=>{
+    let cur = null;
+    const setMap = (m)=>{ if(kind==='orders'){ ordersRecentMap = m; applyOwnOrders(); } else { colsRecentMap = m; applyOwnCollections(); } };
+    cur = q(name).orderBy('createdAt','desc').limit(SPO_RECENT_LIMIT).onSnapshot((s)=>{
+      const m = docsToMap(s);
+      let oldest = Infinity;
+      m.forEach(o=>{ const t = Number(o.createdAt)||0; if(t<oldest) oldest = t; });
+      recentWindow[kind] = { full: s.size >= SPO_RECENT_LIMIT, oldest: oldest===Infinity ? 0 : oldest };
+      recentReady[kind] = true;
+      setMap(m);
+      maybeLoadActivityDay();
+    },(err)=>{
+      console.error(name+' সাম্প্রতিক কোয়েরি ব্যর্থ (ইনডেক্স না থাকলে এই এররের লিংক থেকে তৈরি করুন) — আগের পদ্ধতিতে সব পড়া হচ্ছে:', err);
+      cur = q(name).onSnapshot((s)=>{
+        recentWindow[kind] = { full:false, oldest:0 };
+        recentReady[kind] = true;
+        setMap(docsToMap(s));
+      },(e2)=>console.error(name+' read error:',e2));
+    });
+    unsubs.push(()=>{ if(cur) cur(); });
+  };
+  startRecent('online_orders','orders');
+  startRecent('online_collections','cols');
+  return unsubs;
+}
+
+// পুরনো (সাম্প্রতিক তালিকার বাইরের) তারিখ বেছে নিলে শুধু সেই দিনের ডকুমেন্ট একবার আনা হয়
+async function maybeLoadActivityDay(){
+  if(activityDayLoading) return;
+  if(!dashboardDate || !recentReady.orders || !recentReady.cols) return;
+  if(loadedActivityDays.has(dashboardDate)) return;
+  if(failedActivityDays.has(dashboardDate) && Date.now()-failedActivityDays.get(dashboardDate) < 30000) return;
+  const start = new Date(dashboardDate + 'T00:00:00').getTime();
+  if(!(start>0)) return;
+  const needOrders = recentWindow.orders.full && start < recentWindow.orders.oldest;
+  const needCols = recentWindow.cols.full && start < recentWindow.cols.oldest;
+  if(!needOrders && !needCols){ loadedActivityDays.add(dashboardDate); return; }
+  const user = firebase.auth().currentUser;
+  if(!user || !navigator.onLine) return;
+  const day = dashboardDate, end = start + 86400000;
+  activityDayLoading = true;
+  try{
+    const range = (name)=>db.collection(name).where('createdByUid','==',user.uid).where('createdAt','>=',start).where('createdAt','<',end).get();
+    const [os, cs] = await Promise.all([needOrders ? range('online_orders') : null, needCols ? range('online_collections') : null]);
+    const keepFinal = (snap, map)=>{ docsToMap(snap).forEach((o,k)=>{ if(o.status && o.status!=='pending') map.set(k,o); }); };
+    if(os) keepFinal(os, ordersDayMap);
+    if(cs) keepFinal(cs, colsDayMap);
+    loadedActivityDays.add(day);
+  }catch(e){
+    console.error('Activity day load failed:', e);
+    failedActivityDays.set(day, Date.now());
+    showToast('এই তারিখের পুরনো কার্যক্রম লোড করা যায়নি', 'error');
+  }finally{
+    activityDayLoading = false;
+    rebuildOwnLists();
+    renderActivityList();
+  }
+}
+
 function startListening(){
   stopListening(); const authUser=firebase.auth().currentUser; if(!authUser) return;
   const unsubApp=db.collection('sales_system').doc('appData').onSnapshot((doc)=>{ if(navigator.onLine) setConn(true,'সংযুক্ত'); if(doc.exists){const data=doc.data(); routes=Array.isArray(data.routes)?data.routes:[]; retailers=Array.isArray(data.retailers)?data.retailers:[]; products=Array.isArray(data.products)?data.products:[]; stocks=Array.isArray(data.stocks)?data.stocks:[]; appSettings=(data.appSettings&&typeof data.appSettings==='object')?{stockValueDeductionPercent:15,...data.appSettings}:{stockValueDeductionPercent:15};} renderStep(); },(err)=>{console.error('appData read error:',err);setConn(false,'ডেটা পড়ার সমস্যা');});
-  const unsubOrders=db.collection('online_orders').where('createdByUid','==',authUser.uid).onSnapshot((snap)=>{allOrders=snap.docs.map(d=>d.data());pendingOrders=allOrders.filter(o=>!o.status||o.status==='pending');if(step===0||step===3)renderStep();},(err)=>console.error('online_orders read error:',err));
-  const unsubCollections=db.collection('online_collections').where('createdByUid','==',authUser.uid).onSnapshot((snap)=>{allCollections=snap.docs.map(d=>d.data());if(step===0)renderStep();},(err)=>console.error('online_collections read error:',err));
+  const ownUnsubs=startOwnDataListeners(authUser.uid);
   // রিড কমানোর জন্য sales_invoices ও retailer_collections আর পড়া হয় না;
   // এডমিন আজকের সংখ্যা ও রিটেইলারের বাকি একটা ছোট ডকুমেন্টে লিখে রাখে, শুধু সেটাই পড়া হয়।
   const unsubSpoToday=db.collection('sales_system').doc('spoToday').onSnapshot((doc)=>{spoTodayData=doc.exists?doc.data():null;spoTodayLoaded=true;if(step===0)renderStep();},(err)=>console.error('spoToday read error:',err));
-  stopDataListeners=[unsubApp,unsubSpoToday,unsubOrders,unsubCollections];
+  stopDataListeners=[unsubApp,unsubSpoToday,...ownUnsubs];
 }
 
 // ---------------- step renderers ----------------
+// হেডার ও ধাপ-বারের উচ্চতা মেপে CSS ভ্যারিয়েবলে বসানো — যাতে সার্চ বক্স ঠিক তাদের নিচে আটকে থাকে
+let _stickyRO = null;
+function updateStickyOffsets(){
+  const h = document.querySelector('header.app-top');
+  const s = document.getElementById('stepsBar');
+  if(!_stickyRO && window.ResizeObserver){
+    _stickyRO = new ResizeObserver(()=>updateStickyOffsets());
+    if(h) _stickyRO.observe(h);
+    if(s) _stickyRO.observe(s);
+  }
+  const root = document.documentElement;
+  root.style.setProperty('--hdr-h', (h ? h.offsetHeight : 0) + 'px');
+  root.style.setProperty('--steps-h', ((s && s.style.display!=='none') ? s.offsetHeight : 0) + 'px');
+}
+window.addEventListener('resize', updateStickyOffsets);
+
 function renderStep(){
+  document.body.classList.toggle('prod-step', step===3 && flowMode!=='collection');
+  requestAnimationFrame(updateStickyOffsets);
   renderStepsBar();
   if(step===0) return renderDashboard();
   if(step===1) return renderRouteStep();
@@ -1326,9 +1455,10 @@ function editOrder(orderId){
 function renderActivityList(){
   const listEl = document.getElementById('activityList');
   if(!listEl) return;
+  maybeLoadActivityDay();
   const items = getMyActivity();
   if(items.length===0){
-    listEl.innerHTML = `<div class="empty-state">এই তারিখে কোনো অর্ডার বা কালেকশন পাঠানো হয়নি।</div>`;
+    listEl.innerHTML = activityDayLoading ? `<div class="empty-state">লোড হচ্ছে…</div>` : `<div class="empty-state">এই তারিখে কোনো অর্ডার বা কালেকশন পাঠানো হয়নি।</div>`;
     return;
   }
   listEl.innerHTML = items.map(item=>{
@@ -1428,9 +1558,11 @@ function renderProductStep(){
 
   mainArea.innerHTML = `
     <div class="panel">
-      <div class="field-label">স্টকে থাকা পণ্য থেকে পরিমাণ দিন</div>
-      <input class="search-box" id="prodSearch" placeholder="পণ্যের নাম লিখুন (যেমন: A লিখলে A দিয়ে শুরু পণ্য দেখাবে)…" />
-      <div id="invalidProductsWarning"></div>
+      <div class="sticky-product-head">
+        <div class="field-label">স্টকে থাকা পণ্য থেকে পরিমাণ দিন</div>
+        <input class="search-box" id="prodSearch" placeholder="পণ্যের নাম লিখুন (যেমন: A লিখলে A দিয়ে শুরু পণ্য দেখাবে)…" />
+        <div id="invalidProductsWarning"></div>
+      </div>
       <div id="prodListContainer"></div>
     </div>`;
 
@@ -1481,7 +1613,7 @@ function renderProductListOnly(){
   listEl.innerHTML = '';
   filtered
     .slice()
-    .sort((a,b)=>a.name.localeCompare(b.name))
+    .sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'en',{sensitivity:'base',numeric:true}))
     .forEach(p=>{
       const existing = cart[p.name] || {cartonQty:'', pieceQty:''};
       const availCartons = getAvailableStockQty(p.name);
